@@ -51,7 +51,11 @@ from Interactive_plot_duna import create_dash_app
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# Ensure the APP_DIR variables exist via config
+template_dir = os.path.join(config.APP_DIR, 'templates')
+static_dir = os.path.join(config.APP_DIR, 'static')
+
+app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 CORS(app, resources={r"/*": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*")
 app.config.from_object('config')
