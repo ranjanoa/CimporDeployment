@@ -44,10 +44,10 @@ def load_external_module(module_name, file_name):
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
-            logger.info(f"✅ Loaded external override for module: {module_name}")
+            print(f"✅ Loaded external override for module: {module_name}")
             return True
         except Exception as e:
-            logger.error(f"❌ Failed to load external module {module_name}: {e}")
+            print(f"❌ Failed to load external module {module_name}: {e}")
     return False
 
 # Attempt to load external configs BEFORE they are imported by anything else
