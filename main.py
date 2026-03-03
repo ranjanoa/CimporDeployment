@@ -8,14 +8,13 @@ from datetime import datetime, timedelta
 import threading
 import traceback
 import logging
-# Get the path to the scripts folder inside your .venv
-# This assumes main.py is in the root and .venv is in the root
-venv_script = os.path.join(os.getcwd(), '.venv', 'Scripts', 'activate_this.py')
-
-if os.path.exists(venv_script):
-    exec(open(venv_script).read(), {'__file__': venv_script})
-else:
-    print("Warning: Virtual environment not found. Running with system Python.")
+# Fix for PyInstaller: Do not attempt to activate venv if compiled
+if not getattr(sys, 'frozen', False):
+    venv_script = os.path.join(os.getcwd(), '.venv', 'Scripts', 'activate_this.py')
+    if os.path.exists(venv_script):
+        exec(open(venv_script).read(), {'__file__': venv_script})
+    else:
+        print("Warning: Virtual environment not found. Running with system Python.")
 
 # 🚀 SILENCE OPC LOGS (Critical for Performance)
 # This prevents the console from flooding with "received header"
