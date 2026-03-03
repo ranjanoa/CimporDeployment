@@ -75,8 +75,23 @@ from authentication import auth_routes
 from Interactive_plot_duna import create_dash_app
 
 # --- LOGGING ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+from logging.handlers import RotatingFileHandler
+
+log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# 1. Console Handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(log_formatter)
+logger.addHandler(console_handler)
+
+# 2. File Handler (Rotating)
+# Max 5MB per file, keep 5 backups
+log_file_path = os.path.join(config.LOG_DIR, 'app.log')
+file_handler = RotatingFileHandler(log_file_path, maxBytes=5*1024*1024, backupCount=5)
+file_handler.setFormatter(log_formatter)
+logger.addHandler(file_handler)
 
 # Ensure the APP_DIR variables exist via config
 template_dir = os.path.join(config.APP_DIR, 'templates')
