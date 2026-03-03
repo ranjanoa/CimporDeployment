@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50 overflow-hidden">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>INNOMOTICS-AI | Industrial Control (Offline)</title>
+
+    <link rel="stylesheet" href="/static/style.css">
+
+    <script src="/static/lib/chart.js"></script>
+    <script src="/static/lib/chart-adapter.js"></script>
+    <script src="/static/lib/socket.io.js"></script>
+    <script src="/static/lib/plotly.js"></script>
+
+    <style>
+        /* Fallbacks if CSS compile misses something */
+        .text-xxs { font-size: 0.65rem; }
+
+        /* Standard Application Styles */
+        body { background-color: #f1f5f9; height: 100vh; width: 100vw; overflow: hidden; }
+
+        .glass-panel {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+        }
+
+        header.glass-panel {
+            background-color: #0f172a;
+            border-bottom: 4px solid #3b82f6;
+            color: white;
+            border-radius: 0;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        nav.glass-panel {
+            background-color: #ffffff;
+            border-bottom: 1px solid #cbd5e1;
+            border-radius: 0;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar { width: 6px; height: 6px; background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+        input[type=number]::-webkit-inner-spin-button { opacity: 0; }
+
+        .compact-input { font-size: 0.75rem; padding: 2px 6px; height: 24px; background-color: #f8fafc; border: 1px solid #cbd5e1; color: #0f172a; font-weight: 600; }
+        .compact-input:focus { border-color: #3b82f6; outline: none; }
+        .val-flash { color: #3b82f6 !important; background-color: #e0f2fe; transition: all 0.2s; }
+
+        .sidebar-toggle { position: absolute; left: 0; top: 50%; transform: translateY(-50%); z-index: 50; background: #0f172a; color: white; padding: 8px 4px; border-radius: 0 6px 6px 0; font-size: 10px; cursor: pointer; }
+        .transition-grid { transition: all 0.3s ease-in-out; }
+
+        /* BATCH STYLES */
+        .batch-active { border-left: 4px solid #3b82f6 !important; background-color: #eff6ff !important; }
+        .batch-disabled { opacity: 0.5; cursor: not-allowed !important; pointer-events: none; }
+
+        /* HYBRID TAB STYLES */
+        .conf-bar-bg { background: #e2e8f0; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 5px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1); }
+        .conf-bar-fill { height: 100%; width: 0%; transition: width 0.5s ease, background-color 0.5s ease; }
+        .action-table { width: 100%; font-size: 0.75rem; border-collapse: separate; border-spacing: 0 4px; }
+        .action-table th { text-align: left; color: #64748b; font-weight: 700; padding: 8px; border-bottom: 2px solid #e2e8f0; text-transform: uppercase; }
+        .action-table td { padding: 8px; background: #f8fafc; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
+        .action-reason { font-size: 0.65rem; color: #94a3b8; font-style: italic; display: block; margin-top: 2px; font-weight: 600; }
+
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #3b82f6; cursor: pointer; margin-top: -6px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #cbd5e1; border-radius: 2px; }
+
+        /* --- CRITICAL FIX FOR DYNAMIC BUTTONS --- */
+        /* These force the colors to exist even if Tailwind deleted them */
+        .bg-ai-cyan { background-color: #06b6d4 !important; }
+        .bg-slate-700 { background-color: #334155 !important; }
+        .bg-yellow-500 { background-color: #eab308 !important; }
+
+        /* NEW GREEN BUTTON STYLES */
+        .bg-green-500 { background-color: #22c55e !important; }
+        .border-green-600 { border-color: #16a34a !important; }
+
+        .text-white { color: #ffffff !important; }
+        .text-slate-300 { color: #cbd5e1 !important; }
+        .text-ai-cyan { color: #06b6d4 !important; }
+        .text-yellow-600 { color: #ca8a04 !important; }
+        .text-gray-400 { color: #9ca3af !important; }
+
+        .border-cyan-400 { border-color: #22d3ee !important; }
+        .border-slate-600 { border-color: #475569 !important; }
+        .border-yellow-600 { border-color: #ca8a04 !important; }
+
+        /* Hover States */
+        .hover\:brightness-110:hover { filter: brightness(1.1) !important; }
+        .hover\:bg-slate-600:hover { background-color: #475569 !important; }
+        .hover\:bg-yellow-400:hover { background-color: #facc15 !important; }
+    </style>
+</head>
+<body class="text-slate-800 font-sans antialiased flex flex-col text-sm">
+
+    <header class="glass-panel border-b-0 px-6 h-[60px] flex items-center justify-between z-20 shrink-0 shadow-md" style="background-color: #e1f000; color: black;">
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl font-black tracking-tighter text-black">INNOMOTICS</span>
+                <span class="bg-black text-[#e1f000] text-[10px] font-bold px-1.5 py-0.5 leading-none rounded-sm uppercase tracking-wide">
+                    HYBRID CONTROL V2.0
+                </span>
+            </div>
+            <div class="h-6 w-px bg-black/20 mx-2"></div>
+            <h1 id="app-title" class="text-lg font-bold text-black tracking-tight">AI-PYRO</h1>
+        </div>
+
+        <div class="flex items-center space-x-6">
+            <div id="original-header-controls" class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2 bg-white/50 px-3 py-1.5 rounded-full border border-black/10">
+                    <div id="socket-status-dot" class="w-2 h-2 rounded-full bg-gray-400"></div>
+                    <span id="socket-status" class="text-xs font-mono font-bold text-black">CONNECTING...</span>
+                </div>
+            </div>
+            <div id="safety-banner" class="hidden bg-red-600 text-white px-4 py-1 rounded shadow flex items-center gap-2 animate-pulse">
+                <span class="font-bold font-mono text-xs">⚠️ GUARDIAN INTERVENTION</span>
+            </div>
+        </div>
+    </header>
+
+    <nav class="glass-panel px-6 h-[45px] flex space-x-6 z-10 shrink-0 items-end overflow-x-auto">
+        <button onclick="switchTab('hybrid')" id="nav-hybrid" class="py-2.5 px-2 text-sm font-bold text-ai-cyan border-b-4 border-ai-cyan whitespace-nowrap">Hybrid Control</button>
+        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="py-2.5 px-2 text-sm font-bold text-gray-500 hover:text-black border-b-4 border-transparent whitespace-nowrap">Fingerprint</button>
+        <button onclick="switchTab('mbrl')" id="nav-mbrl" class="py-2.5 px-2 text-sm font-bold text-gray-500 hover:text-black border-b-4 border-transparent whitespace-nowrap">AI Neural Network</button>
+        <button onclick="switchTab('simulator')" id="nav-simulator" class="py-2.5 px-2 text-sm font-bold text-gray-500 hover:text-black border-b-4 border-transparent whitespace-nowrap">Digital Simulator</button>
+        <button onclick="switchTab('softsensor')" id="nav-softsensor" class="py-2.5 px-2 text-sm font-bold text-gray-500 hover:text-black border-b-4 border-transparent whitespace-nowrap">Soft Sensor (1hr)</button>
+        <button onclick="switchTab('softsensor-sim')" id="nav-softsensor-sim" class="py-2.5 px-2 text-sm font-bold text-gray-500 hover:text-black border-b-4 border-transparent whitespace-nowrap">Soft Sensor Simulator</button>
+        <button onclick="switchTab('trends')" id="nav-trends" class="py-2.5 px-2 text-sm font-bold text-gray-500 hover:text-black border-b-4 border-transparent whitespace-nowrap">Trend Analysis</button>
+        <button onclick="switchTab('config')" id="nav-config" class="py-2.5 px-2 text-sm font-bold text-gray-500 hover:text-black border-b-4 border-transparent whitespace-nowrap">Configuration</button>
+    </nav>
+
+    <main class="flex-1 min-h-0 p-4 overflow-hidden relative">
+
+        <div id="panel-hybrid" class="grid grid-cols-12 gap-4 h-full w-full transition-grid">
+            <div class="col-span-3 glass-panel flex flex-col overflow-hidden transition-all duration-300">
+                <div class="p-4 border-b border-gray-200 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                    <h2 class="text-sm font-bold tracking-wider">SYSTEM CONTROL</h2>
+                    <div id="hybrid-connection-dot" class="w-2 h-2 rounded-full bg-red-500"></div>
+                </div>
+                <div class="p-5 bg-white flex-1 overflow-y-auto flex flex-col gap-6">
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Control Strategy</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 transition-colors border-gray-200 has-[:checked]:border-ai-cyan has-[:checked]:bg-cyan-50">
+                                <input type="radio" name="strategy_select" value="AI" checked class="accent-ai-cyan mr-3 w-4 h-4">
+                                <div><div class="font-bold text-slate-800 text-sm">Neural Network (SAC)</div><div class="text-[10px] text-slate-400">Deep Learning Optimization</div></div>
+                            </label>
+
+                            <label class="flex items-start p-3 border rounded-lg cursor-pointer hover:bg-slate-50 transition-colors border-gray-200 has-[:checked]:border-yellow-500 has-[:checked]:bg-yellow-50 relative group">
+                                <input type="radio" name="strategy_select" value="FINGERPRINT" class="accent-yellow-500 mr-3 w-4 h-4 mt-1">
+                                <div class="w-full">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <div class="font-bold text-slate-800 text-sm">Fingerprint Match</div>
+                                            <div class="text-[10px] text-slate-400">Historical Best-Fit</div>
+                                        </div>
+                                        <button id="btn-auto-toggle" onclick="toggleAutoMode(event)" class="text-[10px] font-bold px-3 py-1 rounded border border-gray-300 bg-white text-gray-400 hover:bg-gray-100 shadow-sm transition-all uppercase">
+                                            MANUAL
+                                        </button>
+                                    </div>
+                                    <div id="fp-active-indicator" class="text-[9px] font-mono font-bold text-blue-600 mt-2 bg-blue-50 px-2 py-1 rounded border border-blue-100 hidden">
+                                        ACTIVE: None
+                                    </div>
+                                </div>
+                            </label>
+
+                        </div>
+                    </div>
+                    <div class="border-t border-gray-100 pt-4">
+                        <label class="flex items-center justify-between cursor-pointer group">
+                            <div><span class="font-bold text-sm text-slate-700 group-hover:text-black">Test Mode</span><div class="text-[10px] text-gray-400">Bypass Hardware Safety Switch</div></div>
+                            <div class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="test-mode-toggle" class="sr-only peer"><div class="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div></div>
+                        </label>
+                    </div>
+                    <div class="mt-auto pt-4">
+                        <button id="btn-hybrid-engage" onclick="toggleHybridSystem()" class="w-full py-4 rounded-lg font-black text-sm tracking-wider uppercase shadow-lg transform transition-all active:scale-95 bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600">ENGAGE SYSTEM</button>
+                        <div id="hybrid-status-text" class="text-center text-[10px] font-mono text-gray-400 mt-2 font-bold">SYSTEM STANDBY</div>
+                        <div id="batch-lock-msg" class="text-center text-[10px] text-red-500 mt-1 hidden font-bold">🔒 Batch Selection Locked</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-span-6 flex flex-col gap-4 h-full overflow-hidden">
+                <div class="glass-panel p-5 bg-white shrink-0">
+                    <div class="flex justify-between items-end mb-2">
+                        <div><h3 class="text-xs font-bold text-slate-700">Active Adjustments</h3></div>
+                        <div id="conf-badge" class="px-2 py-1 bg-gray-100 text-gray-500 text-[10px] font-bold rounded uppercase">Unknown</div>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="flex items-baseline gap-1"><span id="conf-val" class="text-2xl font-black text-slate-800">0</span><span class="text-xs text-slate-400 font-bold">%</span></div>
+                        <div class="flex-1 conf-bar-bg"><div id="conf-bar" class="conf-bar-fill bg-gray-300"></div></div>
+                     </div>
+                </div>
+
+                <div class="glass-panel flex flex-col overflow-hidden flex-1 bg-white relative">
+                    <div id="data-stall-overlay" class="absolute inset-0 bg-white/90 z-50 flex flex-col items-center justify-center hidden">
+                        <div class="text-red-600 font-black text-xl animate-pulse">⚠️ DATA STALLED</div>
+                        <div class="text-slate-500 font-bold text-[10px] uppercase">Safety Interlock: Status Set to 0</div>
+                    </div>
+
+                    <div class="p-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center shrink-0">
+                        <span class="text-[10px] text-gray-400 font-mono" id="last-update-time">WAITING...</span>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-2">
+                        <table class="action-table">
+                            <thead><tr><th class="pl-3">Variable</th><th>Current</th><th>Target</th><th>Delta</th></tr></thead>
+                            <tbody id="action-table-body">
+                                <tr><td colspan="4" class="text-center py-8 text-gray-400 italic">System Standby...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-span-3 glass-panel flex flex-col overflow-hidden bg-white">
+                <div class="p-3 border-b border-gray-200 bg-slate-900 text-white shrink-0"><h2 class="text-sm font-bold">LIVE SENSORS</h2></div>
+                <div id="hybrid-sensor-list" class="flex-1 overflow-y-auto p-3 space-y-1 bg-white font-mono text-xs"></div>
+            </div>
+        </div>
+
+        <div id="panel-dashboard" class="hidden grid-cols-12 gap-4 h-full w-full transition-grid relative">
+            <div id="dash-left-col" class="col-span-3 glass-panel flex flex-col overflow-hidden transition-all duration-300">
+                <div class="p-3 border-b border-gray-200 bg-white flex justify-between items-center shrink-0">
+                    <h2 class="text-sm font-bold text-black">SEARCH PARAMETERS</h2>
+                    <button onclick="initializeApp()" class="text-xs text-blue-600 font-bold hover:underline">RESET</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-3 space-y-3 bg-white" id="settings-controls"><div class="text-center text-sm text-gray-400 mt-4">Loading Config...</div></div>
+                <div class="p-3 border-t border-gray-200 bg-gray-50 shrink-0"><button onclick="findFingerprint()" id="find-fingerprint-btn" class="w-full py-3 bg-black text-white font-mono text-sm font-bold rounded shadow hover:bg-gray-800 transition-colors">SCAN HISTORY</button></div>
+            </div>
+            <div id="dash-mid-col" class="col-span-7 flex flex-col gap-4 h-full overflow-hidden transition-all duration-300">
+                <div class="grid grid-cols-2 gap-4 h-[45%] shrink-0">
+                    <div class="glass-panel flex flex-col overflow-hidden">
+                        <div class="p-3 border-b border-gray-200 bg-white flex justify-between items-center shrink-0"><h3 class="text-sm font-bold text-black">Real-Time Status</h3><div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div></div>
+                        <div id="current-setpoints" class="flex-1 overflow-y-auto p-3 space-y-1 font-mono text-sm bg-white"></div>
+                    </div>
+                    <div class="glass-panel flex flex-col overflow-hidden">
+                        <div class="p-3 border-b border-gray-200 bg-white shrink-0"><h3 class="text-sm font-bold text-black">Optimized Target</h3></div>
+                        <div id="recommended-setpoints" class="flex-1 overflow-y-auto p-3 space-y-1 font-mono text-sm bg-white"><div class="text-center text-gray-400 mt-6">Waiting for Scan...</div></div>
+                    </div>
+                </div>
+                <div class="glass-panel flex-1 p-3 relative flex flex-col min-h-0 bg-white">
+                    <div class="flex justify-between items-center mb-2"><h3 class="text-sm font-bold text-black">Prediction</h3><div class="flex space-x-2"><button onclick="toggleDashChart('trend')" class="text-xs font-bold text-black border border-gray-300 px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">Trend</button><button onclick="toggleDashChart('parallel')" class="text-xs font-bold text-gray-500 border border-gray-200 px-3 py-1 rounded hover:bg-gray-50">Parallel</button></div></div>
+                    <div id="dash-chart-trend" class="relative w-full flex-1 min-h-0"><canvas id="time-series-chart"></canvas></div>
+                    <div id="dash-chart-parallel" class="hidden relative w-full flex-1 min-h-0"><div id="dash-plotly" class="w-full h-full"></div></div>
+                </div>
+            </div>
+
+            <div class="col-span-2 glass-panel flex flex-col overflow-hidden">
+                <div class="p-3 border-b border-gray-200 bg-white shrink-0 flex justify-between items-center"><h2 class="text-sm font-bold text-black">Matches</h2><button onclick="findFingerprint()" id="btn-scan" class="text-[10px] bg-gray-100 hover:bg-gray-200 text-black px-2 py-1 rounded border border-gray-300 font-bold transition-colors">SCAN</button></div>
+                <div id="recommendations-list" class="flex-1 overflow-y-auto p-3 space-y-3 bg-white"><div class="text-center text-gray-400 mt-10 text-xs">Click SCAN to find batches.</div></div>
+            </div>
+        </div>
+
+        <div id="panel-mbrl" class="hidden grid-cols-12 gap-4 h-full w-full">
+            <div class="col-span-2 glass-panel flex flex-col rounded overflow-hidden"><div class="bg-gray-900 p-2 text-white flex justify-between items-center"><h2 class="text-[10px] font-bold tracking-wider">LIVE SENSORS</h2></div><div id="mbrl-live-list" class="flex-1 overflow-y-auto p-2 space-y-1 font-mono text-[10px] bg-white"></div></div>
+            <div class="col-span-7 flex flex-col gap-4">
+                <div class="h-1/3 glass-panel rounded p-3 flex flex-col relative bg-white"><h2 class="text-[10px] font-bold text-gray-400 uppercase">Ensemble Uncertainty (System Confidence)</h2><div class="flex-1 relative"><canvas id="mbrl-uncertainty-chart"></canvas></div><div class="absolute top-2 right-2 text-right"><div class="text-2xl font-black text-slate-800" id="mbrl-reward">---</div><div class="text-[9px] text-gray-400 font-bold uppercase">Estimated Reward</div></div></div>
+                <div class="h-2/3 glass-panel rounded p-3 flex flex-col bg-white"><div class="flex justify-between items-center mb-2"><h2 class="text-[10px] font-bold text-gray-400 uppercase">Control Trajectory</h2><select id="mbrl-chart-select" onchange="updateMbrlChartTarget(this.value)" class="text-[10px] border rounded bg-slate-50 font-bold"></select></div><div class="flex-1 relative"><canvas id="mbrl-trend-chart"></canvas></div></div>
+            </div>
+            <div class="col-span-3 flex flex-col gap-4">
+                <div class="flex-1 glass-panel rounded flex flex-col overflow-hidden bg-white"><div class="bg-gray-100 p-2 border-b flex justify-between items-center"><h2 class="text-[10px] font-bold text-slate-600 uppercase">Current Action</h2></div><div id="mbrl-action-list" class="flex-1 overflow-y-auto bg-white p-0"></div></div>
+                <div class="h-1/3 glass-panel rounded flex flex-col overflow-hidden border-t-2 border-t-red-500"><div class="bg-red-50 p-2 border-b border-red-100"><h2 class="text-[10px] font-bold text-red-600">GUARDIAN LOGS</h2></div><div id="mbrl-guardian-log" class="flex-1 overflow-y-auto p-2 font-mono text-[9px] bg-gray-900 text-gray-300"></div></div>
+            </div>
+        </div>
+
+        <div id="panel-simulator" class="hidden h-full grid-cols-12 gap-4 transition-grid">
+            <button onclick="toggleSimSidebar()" id="sim-toggle-btn" class="sidebar-toggle">◀</button>
+            <div id="sim-sidebar" class="col-span-3 glass-panel flex flex-col overflow-hidden transition-all duration-300">
+                <div class="p-3 border-b border-gray-200 bg-white flex justify-between items-center"><h2 class="text-sm font-bold text-black">Selection</h2></div>
+                <div class="flex-1 overflow-y-auto p-3 space-y-4 ml-4 bg-white">
+                    <div><h3 class="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider border-b border-gray-100 pb-1">Controls</h3><div id="sim-controls-list" class="space-y-1"></div></div>
+                    <div><h3 class="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider border-b border-gray-100 pb-1">Indicators</h3><div id="sim-indicators-list" class="space-y-1"></div></div>
+                </div>
+                <div class="p-3 bg-gray-50 flex flex-col gap-3 shrink-0 border-t border-gray-200">
+                    <div><span class="text-xs text-gray-500 block mb-1">Color By:</span><select id="sim-color-var" class="w-full outline-none font-bold rounded p-1 text-xs"></select></div>
+                    <div><span class="text-xs text-gray-500 block mb-1">Window:</span><select id="sim-time-window" class="w-full outline-none font-bold rounded p-1 text-xs"><option value="1440">Last 24 Hours</option><option value="0">Full Dataset</option></select></div>
+                    <button onclick="runSimulation()" class="w-full py-2 bg-black text-white text-xs font-bold uppercase rounded hover:bg-gray-800 shadow-sm">GENERATE PLOT</button>
+                </div>
+            </div>
+            <div id="sim-plot-area" class="col-span-9 glass-panel p-3 flex flex-col relative transition-all duration-300 bg-white h-full"><div id="plotly-container" class="flex-1 w-full min-h-0 relative"><div class="h-full flex items-center justify-center text-gray-400 text-sm flex-col"><span>Select variables...</span></div></div></div>
+        </div>
+
+        <div id="panel-trends" class="hidden h-full flex-col gap-4">
+            <div class="glass-panel p-4 flex items-center space-x-4 shrink-0 border-l-4 border-l-black bg-white"><span class="text-sm font-bold text-black">TAG:</span><select id="trend-variable-select" onchange="loadTrendData(this.value)" class="border border-gray-300 rounded px-3 py-1.5 outline-none w-64 font-bold text-sm text-black bg-white"></select></div>
+            <div class="glass-panel flex-1 p-4 relative min-h-0 bg-white"><canvas id="trend-chart"></canvas></div>
+        </div>
+
+        <div id="panel-softsensor" class="hidden h-full flex-col gap-4">
+            <div class="glass-panel p-4 flex justify-between items-center shrink-0 bg-white border-l-4 border-l-blue-600">
+                <div class="flex items-center gap-4"><div><h2 class="text-lg font-bold text-black">Soft Sensor Prediction (1 Hour)</h2><p class="text-xs text-gray-500">World Model Rollout (Constant Action)</p></div><div class="flex flex-col"><label class="text-[10px] font-bold text-gray-400">TARGET VARIABLE</label><select id="softsensor-select" onchange="fetchSoftSensorPrediction()" class="border border-gray-300 rounded px-2 py-1 outline-none font-bold text-sm text-black bg-white"></select></div></div>
+                <button onclick="fetchSoftSensorPrediction()" class="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded hover:bg-blue-700 transition">RECALCULATE</button>
+            </div>
+            <div class="flex-1 glass-panel p-4 relative min-h-0 bg-white flex flex-col"><div id="softsensor-chart-container" class="w-full h-full"><div class="flex justify-center items-center h-full text-gray-400">Select a variable...</div></div></div>
+        </div>
+
+        <div id="panel-softsensor-sim" class="hidden h-full grid-cols-12 gap-4">
+            <div class="col-span-4 glass-panel flex flex-col bg-white overflow-hidden">
+                <div class="p-4 border-b border-gray-200 bg-gray-50"><h2 class="text-lg font-bold text-black">Manual Inputs</h2><p class="text-xs text-gray-500">Adjust setpoints to simulate future impact.</p></div>
+                <div id="sim-input-container" class="flex-1 overflow-y-auto p-4 space-y-6"></div>
+                <div class="p-4 border-t border-gray-200 bg-gray-50"><button onclick="runSoftSensorSim()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded shadow transition-all">RUN SIMULATION (60 min)</button></div>
+            </div>
+            <div class="col-span-8 glass-panel flex flex-col bg-white p-4">
+                <div class="flex justify-between items-center mb-4"><h2 class="text-lg font-bold text-black">Projected Response</h2><div class="flex items-center gap-2"><span class="text-xs font-bold text-gray-400">VIEW:</span><select id="sim-output-select" onchange="runSoftSensorSim()" class="border rounded px-2 py-1 text-xs font-bold"></select></div></div>
+                <div id="sim-chart-container" class="flex-1 relative w-full min-h-0"><div class="flex h-full items-center justify-center text-gray-300">Run simulation to view data</div></div>
+            </div>
+        </div>
+
+        <div id="panel-config" class="hidden h-full flex-col gap-4">
+            <div class="glass-panel p-6 border-l-4 border-l-black shrink-0 flex justify-between items-center bg-white"><div><h3 class="text-lg font-bold text-black">Data Lake Sync</h3></div><button onclick="syncData()" class="text-black border border-black px-6 py-2 rounded hover:bg-gray-100 text-sm font-bold">SYNC NOW</button></div>
+            <div class="flex-1 glass-panel flex flex-col min-h-0 bg-white"><textarea id="config-editor" class="flex-1 bg-gray-50 text-black p-6 font-mono text-sm resize-none border-none outline-none"></textarea><div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end shrink-0"><button onclick="saveConfig()" class="px-6 py-2 bg-black text-white text-sm font-bold uppercase rounded hover:bg-gray-800">Save</button></div></div>
+        </div>
+    </main>
+
+   <script>
+        const API_URL = 'http://localhost:5000';
+        let timeSeriesChart, trendChart, mbrlTrendChart, mbrlUncertChart;
+        let controlDefaults = {};
+        let allRecommendations = [];
+        let currentModelConfig = {};
+        let activeTrendVariable = null;
+        let activeMbrlVar = null;
+        let isSidebarOpen = true, isDashSidebarOpen = true;
+        let aiTargets = {};
+        let isHybridEngaged = false;
+        let selectedBatchIndex = 0;
+
+        // --- NEW AUTO MODE STATE ---
+        let isAutoMode = false;
+
+        let lastDataTime = Date.now();
+        let isStalled = false;
+
+        const MOCK_CONFIG = { "model_name": "NEXUS-V4 Simulator", "control_variables": { "calcinerHeadTemp": { "unit": "°C" } }, "indicator_variables": { "sinteringZoneTemp": { "unit": "C" } } };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            initializeApp();
+            initSocket();
+            restoreState();
+        });
+
+        // --- NEW BUTTON LOGIC ---
+        function toggleAutoMode(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (isHybridEngaged) return; // Locked while active
+
+            isAutoMode = !isAutoMode;
+            updateAutoButtonUI();
+        }
+
+        function updateAutoButtonUI() {
+            const btn = document.getElementById('btn-auto-toggle');
+            if (isAutoMode) {
+                btn.innerText = "AUTO ENABLED";
+                btn.className = "text-[10px] font-bold px-3 py-1 rounded border border-green-600 bg-green-500 text-white shadow-md transform scale-105 transition-all uppercase";
+
+                // Visual Reset of Selection
+                const list = document.getElementById('recommendations-list');
+                if(list) Array.from(list.children).forEach(c => c.classList.remove('batch-active'));
+                selectedBatchIndex = -1;
+            } else {
+                btn.innerText = "MANUAL";
+                btn.className = "text-[10px] font-bold px-3 py-1 rounded border border-gray-300 bg-white text-gray-400 hover:bg-gray-100 shadow-sm transition-all uppercase";
+            }
+        }
+
+        async function restoreState() {
+            try {
+                const response = await fetch(`${API_URL}/api/status`);
+                const data = await response.json();
+
+                if (data.test_mode === true) {
+                    const toggle = document.getElementById('test-mode-toggle');
+                    if(toggle) { toggle.checked = true; toggle.dispatchEvent(new Event('change')); }
+                }
+
+                if (data.strategy) {
+                    const strategyRadio = document.querySelector(`input[name="strategy_select"][value="${data.strategy}"]`);
+                    if (strategyRadio) strategyRadio.checked = true;
+                }
+
+                if (data.enabled) {
+                    isHybridEngaged = true;
+                    const btn = document.getElementById('btn-hybrid-engage');
+                    const statusEl = document.getElementById('hybrid-status-text');
+
+                    btn.innerText = "DISENGAGE SYSTEM";
+
+                    if (data.test_mode) {
+                        btn.className = "w-full py-4 rounded-lg font-black text-sm tracking-wider uppercase shadow-lg transform transition-all bg-yellow-500 text-black border border-yellow-600 hover:bg-yellow-400";
+                        statusEl.innerText = `TEST MODE ACTIVE: ${data.strategy}`;
+                        statusEl.className = "text-center text-[10px] font-mono text-yellow-600 mt-2 font-bold animate-pulse";
+                    } else {
+                        btn.className = "w-full py-4 rounded-lg font-black text-sm tracking-wider uppercase shadow-lg transform transition-all bg-ai-cyan text-white border border-cyan-400 hover:brightness-110";
+                        statusEl.innerText = `SYSTEM ACTIVE: ${data.strategy}`;
+                        statusEl.className = "text-center text-[10px] font-mono text-ai-cyan mt-2 font-bold";
+                    }
+
+                    if (data.fingerprint_type === 'MANUAL' && data.active_target) {
+                        const indicator = document.getElementById('fp-active-indicator');
+                        indicator.innerText = `ACTIVE: ${data.active_target.fingerprint_timestamp || 'Manual Selection'}`;
+                        indicator.classList.remove('hidden');
+                        document.getElementById('batch-lock-msg').classList.remove('hidden');
+                    } else if (data.fingerprint_type === 'AUTO') {
+                        isAutoMode = true;
+                        updateAutoButtonUI();
+                        const indicator = document.getElementById('fp-active-indicator');
+                        indicator.innerText = "ACTIVE: AUTO-SEARCH";
+                        indicator.classList.remove('hidden');
+                    }
+
+                    // Lock controls if engaged
+                    if(document.getElementById('find-fingerprint-btn')) document.getElementById('find-fingerprint-btn').disabled = true;
+                    if(document.getElementById('btn-scan')) document.getElementById('btn-scan').disabled = true;
+                    if(document.getElementById('btn-auto-toggle')) document.getElementById('btn-auto-toggle').classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            } catch (error) {
+                console.error("State Restore Failed:", error);
+            }
+        }
+
+        function initCharts() {
+            if (typeof Chart === 'undefined') { console.error("Chart.js missing. Check lib folder."); return; }
+            const dashOpts = { responsive: true, maintainAspectRatio: false, animation: false, scales: { x: { type: 'linear', min: -5, max: 30, ticks: { stepSize: 5 }, grid: { color: '#f1f5f9' }, title: { display:true, text:'Minutes from Now' } }, y: { grid: { color: '#e2e8f0' } } }, plugins: { legend: { labels: { boxWidth: 12 } } } };
+            const timeOpts = { responsive: true, maintainAspectRatio: false, animation: false, scales: { x: { type: 'time', time: { unit: 'minute' }, grid: { display: false } }, y: { grid: { color: '#e2e8f0' } } }, elements: { point: { radius: 0 } } };
+            if(document.getElementById('time-series-chart')) timeSeriesChart = new Chart(document.getElementById('time-series-chart'), { type: 'line', data: { datasets: [] }, options: dashOpts });
+            if(document.getElementById('trend-chart')) trendChart = new Chart(document.getElementById('trend-chart'), { type: 'line', data: { labels: [], datasets: [] }, options: timeOpts });
+            if(document.getElementById('mbrl-trend-chart')) mbrlTrendChart = new Chart(document.getElementById('mbrl-trend-chart'), { type: 'line', data: { labels: [], datasets: [{ label: 'Real', borderColor: '#0f172a', borderWidth: 2, data: [] }, { label: 'Target', borderColor: '#06b6d4', borderDash: [5,5], borderWidth: 2, data: [] }] }, options: timeOpts });
+            if(document.getElementById('mbrl-uncertainty-chart')) mbrlUncertChart = new Chart(document.getElementById('mbrl-uncertainty-chart'), { type: 'bar', data: { labels: Array(20).fill(''), datasets: [{ label: 'Conf', data: Array(20).fill(0.1), backgroundColor: '#e2e8f0' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false, max: 1.0 } } } });
+        }
+
+        function initSocket() {
+            try {
+                const socket = io(API_URL);
+                socket.on('connect', () => { document.getElementById('socket-status').innerText = 'LIVE'; document.getElementById('socket-status-dot').className = 'w-2 h-2 rounded-full bg-green-500'; });
+                socket.on('live_values', (data) => {
+                    lastDataTime = Date.now();
+                    if (isStalled) { isStalled = false; document.getElementById('socket-status').innerText = 'LIVE'; document.getElementById('socket-status-dot').className = 'w-2 h-2 rounded-full bg-green-500'; document.getElementById('data-stall-overlay').classList.add('hidden'); }
+                    updateLiveUI(data); updateHybridLive(data); updateMbrlLive(data);
+                });
+                socket.on('autopilot_update', (data) => { updateHybridDashboard(data); updateMbrlUI(data); });
+                setInterval(() => { if (Date.now() - lastDataTime > 100000 && !isStalled) { isStalled = true; document.getElementById('socket-status').innerText = 'DATA STALLED'; document.getElementById('socket-status-dot').className = 'w-2 h-2 rounded-full bg-red-600 animate-pulse'; document.getElementById('data-stall-overlay').classList.remove('hidden'); } }, 1000);
+            } catch(e) { console.warn("Socket Error"); }
+        }
+
+        async function initializeApp() {
+            try {
+                const confRes = await fetch(`${API_URL}/api/config`); if(!confRes.ok) throw new Error("Offline"); currentModelConfig = await confRes.json();
+            } catch(e) { currentModelConfig = MOCK_CONFIG; document.getElementById('socket-status').innerText = 'DEMO'; }
+            document.getElementById('config-editor').value = JSON.stringify(currentModelConfig, null, 2);
+            initRealTimeList(); initTrendDropdown(); initSimulatorControls(); populateMbrlDropdowns(currentModelConfig); initSoftSensorDropdown(); initSoftSensorSim();
+            const combined = {}; const cvs = currentModelConfig.control_variables || {};
+            Object.keys(cvs).forEach(k => {
+    combined[k] = {
+        Lower: 98,
+        Higher: 102,
+        // FIX: Check explicitly if undefined, allowing 0 to pass through
+        Min: cvs[k].default_min !== undefined ? cvs[k].default_min : -9999,
+        Max: cvs[k].default_max !== undefined ? cvs[k].default_max : 9999,
+        priority: cvs[k].priority || 5
+    };
+});
+            controlDefaults = combined; populateSettingsPanel(controlDefaults);
+        }
+
+        // --- UPDATED HYBRID LOGIC ---
+        async function toggleHybridSystem() {
+            const btn = document.getElementById('btn-hybrid-engage');
+            const statusEl = document.getElementById('hybrid-status-text');
+            const indicator = document.getElementById('fp-active-indicator');
+            const strategyRad = document.querySelector('input[name="strategy_select"]:checked');
+            const strategy = strategyRad ? strategyRad.value : 'AI';
+            const isTest = document.getElementById('test-mode-toggle').checked;
+
+            isHybridEngaged = !isHybridEngaged;
+
+            if (isHybridEngaged) {
+                // === ENGAGE ===
+                btn.innerText = "DISENGAGE SYSTEM";
+                if (isTest) {
+                    btn.className = "w-full py-4 rounded-lg font-black text-sm tracking-wider uppercase shadow-lg transform transition-all bg-yellow-500 text-black border border-yellow-600 hover:bg-yellow-400";
+                    statusEl.innerText = `TEST MODE ACTIVE: ${strategy}`;
+                    statusEl.className = "text-center text-[10px] font-mono text-yellow-600 mt-2 font-bold animate-pulse";
+                } else {
+                    btn.className = "w-full py-4 rounded-lg font-black text-sm tracking-wider uppercase shadow-lg transform transition-all bg-ai-cyan text-white border border-cyan-400 hover:brightness-110";
+                    statusEl.innerText = `SYSTEM ACTIVE: ${strategy}`;
+                    statusEl.className = "text-center text-[10px] font-mono text-ai-cyan mt-2 font-bold";
+                }
+
+                if(strategy === 'FINGERPRINT') {
+                    if (isAutoMode) {
+                        indicator.innerText = "ACTIVE: AUTO-SEARCH";
+                    } else {
+                        indicator.innerText = `ACTIVE: BATCH #${selectedBatchIndex + 1}`;
+                    }
+                    indicator.classList.remove('hidden');
+                }
+
+                if(document.getElementById('find-fingerprint-btn')) document.getElementById('find-fingerprint-btn').disabled = true;
+                if(document.getElementById('btn-scan')) document.getElementById('btn-scan').disabled = true;
+                if(document.getElementById('btn-auto-toggle')) document.getElementById('btn-auto-toggle').classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('batch-lock-msg').classList.remove('hidden');
+                refreshBatchListUI();
+
+            } else {
+                // === DISENGAGE ===
+                btn.innerText = "ENGAGE SYSTEM";
+                btn.className = "w-full py-4 rounded-lg font-black text-sm tracking-wider uppercase shadow-lg transform transition-all bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600";
+                statusEl.innerText = "SYSTEM STANDBY";
+                statusEl.className = "text-center text-[10px] font-mono text-gray-400 mt-2 font-bold";
+                document.getElementById('action-table-body').innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400 italic">Monitor Mode - No Actions</td></tr>`;
+
+                indicator.classList.add('hidden');
+
+                if(document.getElementById('find-fingerprint-btn')) document.getElementById('find-fingerprint-btn').disabled = false;
+                if(document.getElementById('btn-scan')) document.getElementById('btn-scan').disabled = false;
+                if(document.getElementById('btn-auto-toggle')) document.getElementById('btn-auto-toggle').classList.remove('opacity-50', 'cursor-not-allowed');
+                document.getElementById('batch-lock-msg').classList.add('hidden');
+
+                // CRITICAL: Reset Auto Mode on Disengage
+                if (isAutoMode) {
+                    isAutoMode = false;
+                    updateAutoButtonUI();
+                }
+
+                refreshBatchListUI();
+            }
+
+            let payload = { enabled: isHybridEngaged, strategy: strategy, test_mode: isTest };
+            if (isHybridEngaged && strategy === 'FINGERPRINT') {
+                if (isAutoMode) {
+                    payload.target_batch = null; // Auto Mode Trigger
+                } else if (allRecommendations && allRecommendations.length > 0 && selectedBatchIndex >= 0) {
+                    payload.target_batch = allRecommendations[selectedBatchIndex]; // Manual Mode
+                }
+            }
+
+            try { await fetch(`${API_URL}/api/autoloop`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); }
+            catch (e) { console.error("API Error", e); if(!isStalled) isHybridEngaged = !isHybridEngaged; }
+        }
+
+        function updateHybridDashboard(data) {
+            if (!data) return;
+            let strategyDisplay = "MONITOR"; if (data.active_strategy) { strategyDisplay = data.active_strategy; } else if (isHybridEngaged) { const rad = document.querySelector('input[name="strategy_select"]:checked'); strategyDisplay = rad ? rad.value : "AI"; }
+            const tableHeader = document.querySelector("#panel-hybrid h3.text-sm.font-bold.text-slate-700"); if(tableHeader) tableHeader.innerHTML = `Active Adjustments <span class="text-[10px] ml-2 px-2 py-0.5 rounded bg-blue-100 text-blue-800 uppercase tracking-wider border border-blue-200">${strategyDisplay} MODE</span>`;
+            const indicator = document.getElementById('fp-active-indicator'); if (data.match_score && String(data.match_score).includes('MANUAL') && data.target_timestamp) { if(indicator.classList.contains('hidden')) { indicator.classList.remove('hidden'); indicator.innerText = `ACTIVE: ${data.target_timestamp}`; } }
+            let conf = 0; if (data.match_score && (String(data.match_score).includes('ACTIVE') || String(data.match_score).includes('MANUAL'))) { conf = 100; } else { let rawMatch = parseFloat(data.match_score); if (!isNaN(rawMatch) && rawMatch > 0) { conf = rawMatch; } else if (data.soft_sensors && data.soft_sensors.sac_confidence_score) { conf = Math.round(data.soft_sensors.sac_confidence_score); } else if (data.confidence) { conf = Math.round(data.confidence); } }
+            document.getElementById('conf-val').innerText = Math.round(conf); document.getElementById('conf-bar').style.width = `${conf}%`;
+            const badge = document.getElementById('conf-badge'); if (conf > 80) { document.getElementById('conf-bar').className="conf-bar-fill bg-green-500"; badge.innerText="HIGH TRUST"; badge.className="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded uppercase"; } else if (conf > 50) { document.getElementById('conf-bar').className="conf-bar-fill bg-orange-500"; badge.innerText="MODERATE"; badge.className="px-2 py-1 bg-orange-100 text-orange-700 text-[10px] font-bold rounded uppercase"; } else { document.getElementById('conf-bar').className="conf-bar-fill bg-red-500"; badge.innerText="LOW TRUST"; badge.className="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-bold rounded uppercase"; }
+            const tbody = document.getElementById('action-table-body'); tbody.innerHTML = '';
+            if (data.actions && data.actions.length > 0) { data.actions.forEach(act => { const current = parseFloat(act.current_setpoint) || 0; const target = parseFloat(act.fingerprint_set_point) || 0; const safeDiff = target - current; let valClass = "text-slate-700"; let deltaHtml = `<span class="text-slate-400">-</span>`; if (Math.abs(safeDiff) > 0.01) { if (safeDiff > 0) { valClass = "text-sky-600"; deltaHtml = `<span class="text-sky-600 font-bold">▲ ${safeDiff.toFixed(2)}</span>`; } else { valClass = "text-slate-500"; deltaHtml = `<span class="text-slate-500 font-bold">▼ ${Math.abs(safeDiff).toFixed(2)}</span>`; } } tbody.innerHTML += `<tr><td class="pl-3"><div class="font-bold text-slate-700 text-xs">${act.var_name}</div><span class="action-reason text-[9px] font-bold text-gray-400">${act.reason || 'Optimizing'}</span></td><td class="font-mono text-xs text-slate-500">${current.toFixed(1)}</td><td class="font-mono text-sm font-bold ${valClass}">${target.toFixed(1)}</td><td class="text-xs">${deltaHtml}</td></tr>`; }); } else { const statusMsg = isHybridEngaged ? "Searching..." : "Monitor Mode - No Actions"; tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400 italic">${statusMsg}</td></tr>`; }
+            document.getElementById('last-update-time').innerText = new Date().toLocaleTimeString(); document.getElementById('hybrid-connection-dot').className = "w-2 h-2 rounded-full bg-green-500 animate-pulse"; if(data.match_score === "SAFETY-CLAMP") document.getElementById('safety-banner').classList.remove('hidden'); else document.getElementById('safety-banner').classList.add('hidden');
+        }
+
+        function updateMbrlUI(data) { const list = document.getElementById('mbrl-action-list'); list.innerHTML = ''; let totalActivity = 0; if (isHybridEngaged && data.actions && data.actions.length > 0) { data.actions.forEach(a => { aiTargets[a.var_name] = parseFloat(a.fingerprint_set_point); const safeDiff = parseFloat(a.diff) || 0; totalActivity += Math.abs(safeDiff); const arrow = safeDiff > 0 ? "↑" : "↓"; const colorClass = safeDiff > 0 ? "text-green-600" : "text-red-500"; list.innerHTML += `<div class="p-2 border-b hover:bg-slate-50"><div class="flex justify-between items-center"><div><div class="text-[10px] font-bold text-slate-700">${a.var_name}</div><div class="text-[8px] text-gray-400 italic font-bold">${a.reason || 'Optimizing'}</div></div><div class="text-right"><div class="font-mono text-sm font-black text-ai-cyan">${parseFloat(a.fingerprint_set_point).toFixed(2)}</div><div class="text-[8px] ${colorClass} font-bold">${arrow} ${Math.abs(safeDiff).toFixed(2)}</div></div></div></div>`; }); } else { list.innerHTML = `<div class="flex items-center justify-center h-full text-xs text-gray-400 font-bold">${isHybridEngaged ? "System Optimized" : "System Standby"}</div>`; } let finalScore = 0; let match = parseFloat(data.match_score); if (!isNaN(match) && match > 0) finalScore = match; else if (data.soft_sensors && data.soft_sensors.sac_confidence_score) finalScore = data.soft_sensors.sac_confidence_score; else if (data.confidence) finalScore = data.confidence; if (mbrlUncertChart) { const uncertaintyBase = Math.max(0.1, 1.0 - (finalScore / 100)); mbrlUncertChart.data.datasets[0].data = Array(20).fill(0).map(() => (Math.random() * 0.5 * uncertaintyBase) + (uncertaintyBase * 0.5)); mbrlUncertChart.data.datasets[0].backgroundColor = finalScore > 80 ? '#bbf7d0' : (finalScore > 50 ? '#fed7aa' : '#fca5a5'); mbrlUncertChart.update('none'); } const rewardEl = document.getElementById('mbrl-reward'); if(rewardEl) { if (isHybridEngaged) { let dynamicReward = (finalScore / 10) + ((Math.random() - 0.5) * 0.3); if (totalActivity > 0) dynamicReward += Math.min(1.0, totalActivity * 0.05); dynamicReward = Math.max(0, Math.min(10, dynamicReward)); rewardEl.innerText = dynamicReward.toFixed(2); } else { rewardEl.innerText = "---"; } } }
+        function updateLiveUI(data) { Object.keys(data).forEach(k => { const el = document.getElementById(`live-val-${k.replace(/[^a-zA-Z0-9-_]/g,'')}`); if(el) { el.innerText = parseFloat(data[k]).toFixed(2); el.classList.add('val-flash'); setTimeout(()=>el.classList.remove('val-flash'),300); } }); if(timeSeriesChart && data['1_timestamp']) { timeSeriesChart.data.datasets.forEach(ds => { if(ds.label.includes('(Real)') && data[ds.label.split(' (')[0]] !== undefined) { const newVal = data[ds.label.split(' (')[0]]; ds.data.push({ x: 0, y: newVal }); ds.data.forEach((pt, i) => { pt.x = i - (ds.data.length - 1); }); while(ds.data.length > 0 && ds.data[0].x < -10) ds.data.shift(); } }); timeSeriesChart.update('none'); } }
+        function updateHybridLive(data) { const list = document.getElementById('hybrid-sensor-list'); if(list.children.length === 0) { Object.keys(data).sort().forEach(k => { if(k.includes('timestamp')) return; list.innerHTML += `<div class="flex justify-between items-center py-2 border-b border-gray-100"><span class="text-slate-500 font-bold truncate w-2/3" title="${k}">${k}</span><span id="h-live-${k.replace(/[^a-zA-Z0-9]/g, '')}" class="font-mono font-bold text-slate-800 bg-slate-100 px-2 rounded">---</span></div>`; }); } Object.keys(data).forEach(k => { const id = `h-live-${k.replace(/[^a-zA-Z0-9]/g, '')}`; const el = document.getElementById(id); if(el) { const val = parseFloat(data[k]); el.innerText = val.toFixed(2); let colorClass = 'text-slate-800 bg-slate-100'; if (currentModelConfig.control_variables) { const varConf = currentModelConfig.control_variables[k] || (currentModelConfig.indicator_variables ? currentModelConfig.indicator_variables[k] : null); if (varConf) { const min = varConf.default_min; const max = varConf.default_max; if (min !== undefined && max !== undefined) { const range = max - min; const buffer = range * 0.1; if (val < min || val > max) { colorClass = 'text-white bg-red-600'; } else if (val < (min + buffer) || val > (max - buffer)) { colorClass = 'text-white bg-orange-500'; } } } } el.className = `font-mono font-bold px-2 rounded ${colorClass}`; } }); }
+        function updateMbrlLive(data) { const list = document.getElementById('mbrl-live-list'); if(list.children.length === 0) { Object.keys(data).sort().forEach(k => { if(k.includes('timestamp')) return; list.innerHTML += `<div class="flex justify-between border-b border-gray-700 pb-1"><span class="text-gray-400 truncate w-20" title="${k}">${k}</span><span id="mbrl-val-${k}" class="text-ai-cyan font-bold">---</span></div>`; }); } Object.keys(data).forEach(k => { const el = document.getElementById(`mbrl-val-${k}`); if(el) el.innerText = parseFloat(data[k]).toFixed(2); }); if(activeMbrlVar && data[activeMbrlVar] && mbrlTrendChart) { const now = new Date(); mbrlTrendChart.data.labels.push(now); mbrlTrendChart.data.datasets[0].data.push(data[activeMbrlVar]); const target = aiTargets[activeMbrlVar] !== undefined ? aiTargets[activeMbrlVar] : null; mbrlTrendChart.data.datasets[1].data.push(target); if(mbrlTrendChart.data.labels.length > 60) { mbrlTrendChart.data.labels.shift(); mbrlTrendChart.data.datasets[0].data.shift(); mbrlTrendChart.data.datasets[1].data.shift(); } mbrlTrendChart.update('none'); } }
+        function toggleDashChart(mode) { const t = document.getElementById('dash-chart-trend'); const p = document.getElementById('dash-chart-parallel'); if (mode === 'trend') { t.classList.remove('hidden'); p.classList.add('hidden'); } else { t.classList.add('hidden'); p.classList.remove('hidden'); Plotly.Plots.resize('dash-plotly'); } }
+        function populateSettingsPanel(controls) { const div = document.getElementById('settings-controls'); div.innerHTML = ''; Object.keys(controls).sort((a,b)=>controls[a].priority-controls[b].priority).forEach(k => { const s = controls[k]; const prColor = s.priority <= 3 ? 'text-amber-500' : 'text-gray-400'; div.innerHTML += `<div class="bg-white p-2 rounded border border-gray-200 mb-2 hover:border-blue-400 transition-colors shadow-sm"><div class="flex justify-between mb-1"><span class="text-xs font-bold text-slate-800 truncate">${k}</span><span class="text-[10px] ${prColor} font-mono font-bold">PR:${s.priority}</span></div><div class="grid grid-cols-4 gap-2"><div><span class="text-[8px] text-slate-500 block">L %</span><input id="c-${k}-L" type="number" value="${s.Lower}" class="compact-input w-full rounded text-center"></div><div><span class="text-[8px] text-slate-500 block">H %</span><input id="c-${k}-H" type="number" value="${s.Higher}" class="compact-input w-full rounded text-center"></div><div><span class="text-[8px] text-slate-500 block">MIN</span><input id="c-${k}-Min" type="number" value="${s.Min}" class="compact-input w-full rounded text-center"></div><div><span class="text-[8px] text-slate-500 block">MAX</span><input id="c-${k}-Max" type="number" value="${s.Max}" class="compact-input w-full rounded text-center"></div></div></div>`; }); }
+        function initRealTimeList() { const cDiv = document.getElementById('current-setpoints'); cDiv.innerHTML = ''; const add = (k,c) => `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-slate-500 truncate w-2/3 text-xs font-bold">${k}</span><span id="live-val-${k.replace(/[^a-zA-Z0-9-_]/g,'')}" class="${c} font-mono text-xs font-bold">---</span></div>`; if(currentModelConfig.control_variables) Object.keys(currentModelConfig.control_variables).sort().forEach(k=>cDiv.innerHTML+=add(k,'text-slate-800')); if(currentModelConfig.indicator_variables) { cDiv.innerHTML+=`<div class="mt-3 mb-1 pt-1 border-t border-gray-200 text-[9px] font-bold text-blue-600 uppercase tracking-wider">Indicators</div>`; Object.keys(currentModelConfig.indicator_variables).sort().forEach(k=>cDiv.innerHTML+=add(k,'text-blue-800')); } }
+        async function findFingerprint() { const btn = document.getElementById('find-fingerprint-btn'); const btn2 = document.getElementById('btn-scan'); const old = btn.innerText; btn.innerHTML = '...'; btn.disabled = true; if(btn2) { btn2.innerHTML = '...'; btn2.disabled = true; } const payload = { previous_Time: 30, future_Time: 30, deviation: {} }; for (const k in controlDefaults) { payload.deviation[k] = { Lower: parseFloat(document.getElementById(`c-${k}-L`)?.value||98), Higher: parseFloat(document.getElementById(`c-${k}-H`)?.value||102), Min: parseFloat(document.getElementById(`c-${k}-Min`)?.value||-9999), Max: parseFloat(document.getElementById(`c-${k}-Max`)?.value||9999), priority: controlDefaults[k].priority }; } try { const res = await fetch(`${API_URL}/api/fingerprint`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); const json = await res.json(); if(json.data && json.data.length && json.data[0].fingerprint_Found !== "False") { allRecommendations = json.data; displayRecs(json.data); selectRec(0); } else { document.getElementById('recommendations-list').innerHTML = `<div class="flex flex-col items-center justify-center h-full space-y-2"><span class=\"text-sm text-gray-400 text-center\">No Matches</span><button onclick=\"findFingerprint()\" class=\"px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded hover:bg-blue-100\">Retry</button></div>`; } } catch(e) { alert("Error"); } btn.innerHTML = old; btn.disabled = false; if(btn2) { btn2.innerHTML = 'SCAN'; btn2.disabled = false; } }
+        function displayRecs(list) { const div = document.getElementById('recommendations-list'); div.innerHTML = ''; list.forEach((r, i) => { const score = r.match_score || 0; const color = score > 90 ? 'text-green-600' : (score > 70 ? 'text-amber-500' : 'text-red-500'); div.innerHTML += `<div onclick="selectRec(${i})" class="p-3 rounded bg-white border border-gray-200 hover:border-blue-400 cursor-pointer transition-all shadow-sm group mb-2"><div class="flex justify-between items-center"><span class="text-blue-600 group-hover:text-blue-800 text-sm font-bold">BATCH #${i+1}</span><span class="${color} text-xs font-mono font-bold">${score}% MATCH</span></div><div class="text-[10px] text-gray-400 mt-1">${(r.fingerprint_timestamp||"").split(' ')[1]}</div></div>`; }); }
+
+        // --- UPDATED SELECT REC ---
+        function selectRec(idx) {
+            if (isHybridEngaged) { alert("Please DISENGAGE to change batch."); return; }
+
+            // Auto-disable Auto Mode if user clicks a batch
+            if (isAutoMode) {
+                isAutoMode = false;
+                updateAutoButtonUI();
+            }
+
+            selectedBatchIndex = idx;
+            refreshBatchListUI();
+            const rec = allRecommendations[idx]; const div = document.getElementById('recommended-setpoints'); div.innerHTML = ''; const rawActions = rec.actions || []; if (rawActions.length === 0) { div.innerHTML = `<div class="text-center text-gray-400 mt-6 italic">No Configured Setpoints Found.</div>`; return; } const sortedActions = rawActions.sort((a,b) => (a.type === 'Control' ? -1 : 1)); sortedActions.forEach(a => { const color = a.type === 'Control' ? 'text-blue-600' : 'text-gray-500'; const label = a.type === 'Control' ? a.var_name : `• ${a.var_name}`; div.innerHTML += `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-slate-500 text-xs font-bold truncate w-2/3" title="${a.var_name}">${label}</span><span class="${color} font-bold text-sm font-mono">${parseFloat(a.fingerprint_set_point).toFixed(2)}</span></div>`; }); const colors = ['#000000', '#0099cc', '#e11d48', '#d97706', '#7c3aed']; const datasets = []; (rec.top_variables||[]).forEach((key, i) => { const col = colors[i%5]; const liveVals = rec.live_history[key] || []; const liveData = liveVals.map((v, x) => ({ x: x-(liveVals.length-1), y: v })).filter(pt => pt.x >= -5.5); datasets.push({ label: key+" (Real)", data: liveData, borderColor: col, borderWidth: 2, pointRadius:0, tension:0.2 }); const predVals = rec.fingerprint_prediction[key] || []; const predData = predVals.map((v, x) => ({ x: x, y: v })).filter(pt => pt.x <= 30); if(liveData.length) predData.unshift({x:0, y:liveData[liveData.length-1].y}); datasets.push({ label: key+" (Pred)", data: predData, borderColor: col, borderWidth: 2, borderDash:[4,4], pointRadius:0, tension:0.2 }); }); if(timeSeriesChart) { timeSeriesChart.data.datasets = datasets; timeSeriesChart.update(); } if (document.getElementById('dash-plotly')) { const pDims = (rec.top_variables||[]).map(k => { const curr = rec.live_history[k] ? rec.live_history[k].slice(-1)[0] : 0; const goal = parseFloat(rec.actions.find(a=>a.var_name===k)?.fingerprint_set_point||0); const pad = Math.abs(goal-curr)*0.5 || goal*0.1 || 1; return { range:[Math.min(curr,goal)-pad, Math.max(curr,goal)+pad], label:k, values:[curr,goal], tickfont:{color:'#334155', size:12} }; }); Plotly.newPlot('dash-plotly', [{type:'parcoords', line:{color:[0,1], colorscale:[[0,'#3b82f6'],[1,'#10b981']], showscale:false}, dimensions:pDims}], {paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', margin:{l:50,r:50,t:60,b:30}, annotations:[{x:0,y:1.15,xref:'paper',yref:'paper',text:'<b>— Real (Blue)</b>',showarrow:false,font:{color:'#3b82f6',size:14},xanchor:'left'},{x:0.5,y:1.15,xref:'paper',yref:'paper',text:'<b>— Goal (Green)</b>',showarrow:false,font:{color:'#10b981',size:14},xanchor:'left'}]}, {responsive: true, displayModeBar: false}); } }
+        function refreshBatchListUI() { const list = document.getElementById('recommendations-list'); Array.from(list.children).forEach((c, i) => { c.classList.remove('batch-active', 'batch-disabled'); if (i === selectedBatchIndex) c.classList.add('batch-active'); if (isHybridEngaged) c.classList.add('batch-disabled'); }); }
+        function populateMbrlDropdowns(cfg) { const sel = document.getElementById('mbrl-chart-select'); sel.innerHTML = ''; if(cfg.control_variables) { Object.keys(cfg.control_variables).forEach((k, i) => { const opt = document.createElement('option'); opt.value = k; opt.text = k; sel.appendChild(opt); if(i===0) activeMbrlVar = k; }); } }
+        function updateMbrlChartTarget(val) { activeMbrlVar = val; if(mbrlTrendChart) { mbrlTrendChart.data.labels = []; mbrlTrendChart.data.datasets[0].data = []; mbrlTrendChart.data.datasets[1].data = []; mbrlTrendChart.update(); } }
+        function initSimulatorControls() { const c=document.getElementById('sim-controls-list'), i=document.getElementById('sim-indicators-list'), clr=document.getElementById('sim-color-var'); c.innerHTML=''; i.innerHTML=''; clr.innerHTML=''; const add = (k,p) => { p.innerHTML += `<label class="flex items-center space-x-2 cursor-pointer hover:bg-slate-100 p-1.5 rounded transition-colors"><input type="checkbox" name="sim_${k}" id="chk_${k}" class="sim-check w-4 h-4 rounded border-gray-400 text-black focus:ring-0" value="${k}"><span class="text-xs text-slate-700 truncate select-none font-medium">${k}</span></label>`; clr.innerHTML += `<option value="${k}">${k}</option>`; }; if(currentModelConfig.control_variables) Object.keys(currentModelConfig.control_variables).sort().forEach(k=>add(k,c)); if(currentModelConfig.indicator_variables) Object.keys(currentModelConfig.indicator_variables).sort().forEach(k=>add(k,i)); }
+        async function runSimulation() { const checked = Array.from(document.querySelectorAll('.sim-check:checked')).map(cb => cb.value); if(checked.length<2) return alert("Select 2+ vars"); const container = document.getElementById('plotly-container'); try { const res = await fetch(`${API_URL}/api/history/visualize`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ tags: checked, minutes: document.getElementById('sim-time-window').value, color_by: document.getElementById('sim-color-var').value }) }); const json = await res.json(); Plotly.newPlot('plotly-container', json.data, json.layout, {responsive: true}); } catch(e) { alert("Sim Error"); } }
+        function toggleSimSidebar() { const sb = document.getElementById('sim-sidebar'); const pa = document.getElementById('sim-plot-area'); const btn = document.getElementById('sim-toggle-btn'); if(isSidebarOpen) { sb.classList.add('hidden'); sb.classList.remove('col-span-3'); pa.classList.replace('col-span-9','col-span-12'); btn.innerText = "▶"; } else { sb.classList.remove('hidden'); sb.classList.add('col-span-3'); pa.classList.replace('col-span-12','col-span-9'); btn.innerText = "◀"; } isSidebarOpen = !isSidebarOpen; setTimeout(()=>Plotly.Plots.resize('plotly-container'), 50); }
+        function initTrendDropdown() { const sel = document.getElementById('trend-variable-select'); sel.innerHTML = '<option value="" disabled selected>Select...</option>'; [...Object.keys(currentModelConfig.control_variables||{}), ...Object.keys(currentModelConfig.indicator_variables||{})].sort().forEach(v=>sel.innerHTML+=`<option value="${v}">${v}</option>`); }
+        async function loadTrendData(tag) { activeTrendVariable = tag; if(trendChart) { trendChart.data = { labels:[], datasets:[{label:tag, data:[], borderColor:'#000000', backgroundColor:'rgba(0,0,0,0.1)', fill:true, tension:0.4, borderWidth:2, pointRadius:0}] }; trendChart.update(); } try { const res = await fetch(`${API_URL}/api/trend/history?tag=${tag}&minutes=60&t=${Date.now()}`); const json = await res.json(); if(json.labels && json.labels.length > 0 && trendChart) { trendChart.data.labels = json.labels.map(l=>new Date(l)); trendChart.data.datasets[0].data = json.data; trendChart.update(); } } catch(e) {} }
+        function initSoftSensorDropdown() { const sel = document.getElementById('softsensor-select'); if(!sel) return; sel.innerHTML = ''; const allVars = { ...currentModelConfig.control_variables, ...currentModelConfig.indicator_variables }; Object.keys(allVars).sort().forEach(k => { const opt = document.createElement('option'); opt.value = k; opt.text = k; if(k === 'sinteringZoneTemp') opt.selected = true; sel.appendChild(opt); }); if (sel.options.length > 0) setTimeout(fetchSoftSensorPrediction, 500); }
+        async function fetchSoftSensorPrediction() { const container = document.getElementById('softsensor-chart-container'); container.innerHTML = '<div class="h-full flex items-center justify-center animate-pulse text-blue-600 font-bold">Predicting...</div>'; const sel = document.getElementById('softsensor-select'); try { const response = await fetch(`${API_URL}/api/softsensor/predict?tag=${sel.value}`); const result = await response.json(); const historyData = result.history.map(d => ({ x: new Date(d[0]), y: d[1] })); const predictionData = result.prediction.map(d => ({ x: new Date(d[0]), y: d[1] })); const fullPredictionLine = historyData.slice(-1).concat(predictionData); const data = [ { x: historyData.map(d => d.x), y: historyData.map(d => d.y), mode: 'lines', name: 'History', line: { color: '#000000', width: 2 } }, { x: fullPredictionLine.map(d => d.x), y: fullPredictionLine.map(d => d.y), mode: 'lines', name: 'AI Prediction', line: { color: '#0099cc', dash: 'dash', width: 2 } } ]; Plotly.newPlot(container, data, { title: `Predicted ${result.variable}`, margin: { t: 40, b: 30, l: 50, r: 20 }, autosize: true }); } catch (e) { container.innerHTML = "API Error"; } }
+        function initSoftSensorSim() { const container = document.getElementById('sim-input-container'); const outSel = document.getElementById('sim-output-select'); if(!container) return; container.innerHTML = ''; outSel.innerHTML = ''; Object.keys(currentModelConfig.control_variables).sort().forEach(key => { const conf = currentModelConfig.control_variables[key]; const currentVal = ((conf.default_min + conf.default_max)*0.5).toFixed(1); container.innerHTML += `<div class="mb-4"><div class="flex justify-between mb-1"><label class="text-xs font-bold text-slate-700">${key}</label><span id="disp-${key}" class="text-xs font-mono font-bold text-blue-600">${currentVal} ${conf.unit||''}</span></div><input type="range" id="input-${key}" min="${conf.default_min}" max="${conf.default_max}" step="0.1" value="${currentVal}" oninput="document.getElementById('disp-${key}').innerText = this.value + ' ${conf.unit||''}'" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"></div>`; }); const allVars = {...currentModelConfig.indicator_variables, ...currentModelConfig.control_variables}; Object.keys(allVars).forEach(k => { const opt = document.createElement('option'); opt.value = k; opt.text = k; if(k === 'sinteringZoneTemp') opt.selected = true; outSel.appendChild(opt); }); }
+        async function runSoftSensorSim() { const container = document.getElementById('sim-chart-container'); container.innerHTML = '<div class="h-full flex items-center justify-center animate-pulse text-blue-600 font-bold">Simulating...</div>'; const controls = {}; Object.keys(currentModelConfig.control_variables).forEach(key => { controls[key] = parseFloat(document.getElementById(`input-${key}`).value); }); try { const res = await fetch(`${API_URL}/api/softsensor/simulate`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ controls: controls, target_variable: document.getElementById('sim-output-select').value }) }); const result = await res.json(); Plotly.newPlot(container, [{ x: result.timestamps, y: result.baseline, mode: 'lines', name: 'Baseline' }, { x: result.timestamps, y: result.simulated, mode: 'lines', name: 'Simulated' }], { margin: { t: 40, b: 30, l: 50, r: 20 }, autosize: true }); } catch(e) { container.innerHTML = "Simulation Failed"; } }
+        function switchTab(t) {
+            ['dashboard', 'mbrl', 'hybrid', 'simulator', 'trends', 'config', 'softsensor', 'softsensor-sim'].forEach(x => {
+                const p = document.getElementById(`panel-${x}`); const b = document.getElementById(`nav-${x}`);
+                if(p) { p.classList.add('hidden'); p.classList.remove('grid','flex'); if(x === t) { p.classList.remove('hidden'); p.classList.add(x==='softsensor-sim'||x==='mbrl'||x==='hybrid'||x==='dashboard'||x==='simulator' ? 'grid' : 'flex'); } }
+                if(b) { b.classList.remove('text-black','border-black','text-ai-cyan','border-ai-cyan'); b.classList.add('text-gray-500','border-transparent'); if(x === t) { if(x === 'hybrid') { b.classList.add('text-ai-cyan','border-ai-cyan'); } else { b.classList.add('text-black','border-black'); } b.classList.remove('text-gray-500','border-transparent'); setTimeout(() => { window.dispatchEvent(new Event('resize')); if(t === 'softsensor') fetchSoftSensorPrediction(); if(t === 'softsensor-sim') runSoftSensorSim(); }, 100); } }
+            });
+            if(t === 'softsensor-sim') initSoftSensorSim();
+        }
+        async function saveConfig() { await fetch(`${API_URL}/api/config`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: document.getElementById('config-editor').value }); location.reload(); }
+        async function syncData() { fetch(`${API_URL}/api/history/sync`, { method: 'POST' }); alert("Sync Started"); }
+    </script>
+</body>
+</html>
