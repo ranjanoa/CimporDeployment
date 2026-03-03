@@ -2,10 +2,19 @@
 # System-level configuration for InfluxDB 2.0+ & Hybrid Control
 
 import os
+import sys
 from datetime import datetime
 
 # --- PATH FIX: Get the absolute path of the project root ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# If running as an executable created by PyInstaller (sys.frozen),
+# get the directory of the executable itself to allow 'files/' to live next to it.
+if getattr(sys, 'frozen', False):
+    APP_DIR = os.path.dirname(sys.executable)
+    # PyInstaller unpacks internal files (templates, static) to _MEIPASS
+    BASE_DIR = sys._MEIPASS
+else:
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_DIR = APP_DIR
 
 # ==============================================================================
 # 1. NEW HYBRID CONTROL SETTINGS
@@ -57,10 +66,10 @@ SIMILARITY_MINUS_UPPER_PCT = 1.10
 # ==============================================================================
 # 4. FILE PATHS
 # ==============================================================================
-LOG_DIR = os.path.join(BASE_DIR, "files", "logs")
-JSON_DIR = os.path.join(BASE_DIR, "files", "json")
-DATA_DIR = os.path.join(BASE_DIR, "files", "data")
-MODELS_DIR = os.path.join(BASE_DIR, "files", "models")
+LOG_DIR = os.path.join(APP_DIR, "files", "logs")
+JSON_DIR = os.path.join(APP_DIR, "files", "json")
+DATA_DIR = os.path.join(APP_DIR, "files", "data")
+MODELS_DIR = os.path.join(APP_DIR, "files", "models")
 
 # Ensure dirs exist
 for d in [LOG_DIR, JSON_DIR, DATA_DIR, MODELS_DIR]:

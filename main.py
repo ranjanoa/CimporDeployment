@@ -304,8 +304,8 @@ def on_connect():
 
 if __name__ == "__main__":
     # Ensure templates folder exists for the new route
-    if not os.path.exists(os.path.join(BASE_DIR, 'templates')):
-        os.makedirs(os.path.join(BASE_DIR, 'templates'), exist_ok=True)
+    if not os.path.exists(os.path.join(config.APP_DIR, 'templates')):
+        os.makedirs(os.path.join(config.APP_DIR, 'templates'), exist_ok=True)
         # print("⚠️ WARNING: Created 'templates' folder. Please move 'index.html' there.")
 
     socketio.run(app, host="0.0.0.0", port=5000, debug=True, use_reloader=False, allow_unsafe_werkzeug=True)
