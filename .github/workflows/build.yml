@@ -30,13 +30,13 @@ jobs:
 
     - name: Build Executable
       run: |
-        pyinstaller --name "ProcessOptimizationApp" --onefile \
-          --add-data "templates;templates" \
-          --add-data "static;static" \
-          --hidden-import "engineio.async_drivers.threading" \
-          --hidden-import "engineio.async_drivers.eventlet" \
-          --hidden-import "engineio.async_drivers.gevent" \
-          --hidden-import "eventlet" \
+        pyinstaller --name "ProcessOptimizationApp" --onefile `
+          --add-data "templates;templates" `
+          --add-data "static;static" `
+          --hidden-import "engineio.async_drivers.threading" `
+          --hidden-import "engineio.async_drivers.eventlet" `
+          --hidden-import "engineio.async_drivers.gevent" `
+          --hidden-import "eventlet" `
           main.py
 
     - name: Upload Artifact
