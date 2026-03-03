@@ -63,7 +63,8 @@ def initialize_system():
     logger.info("🚀 System Initializing...")
 
     # 1. Force Config Load with Absolute Path
-    target_config_path = os.path.join(BASE_DIR, 'files', 'json', 'model_config.json')
+    # Use config.APP_DIR to ensure it references the executable path, not the temp _MEIPASS folder.
+    target_config_path = os.path.join(config.APP_DIR, 'files', 'json', 'model_config.json')
     logger.info(f"📂 Target Config Path: {target_config_path}")
 
     if not os.path.exists(target_config_path):
@@ -82,7 +83,7 @@ def initialize_system():
 
     # 3. Load History
     try:
-        csv_path = os.path.join(BASE_DIR, 'files', 'data', 'fingerprint4.csv')
+        csv_path = os.path.join(config.APP_DIR, 'files', 'data', 'fingerprint4.csv')
         config.HISTORICAL_DATA_CSV_PATH = csv_path
 
         df = pd.read_csv(csv_path)
