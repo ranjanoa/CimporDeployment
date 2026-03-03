@@ -27,6 +27,33 @@ logging.getLogger("uaclient").setLevel(logging.WARNING)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(BASE_DIR, 'modules'))
 
+# --- DYNAMIC EXTERNAL LOADER ---
+import importlib.util
+
+if getattr(sys, 'frozen', False):
+    APP_DIR = os.path.dirname(sys.executable)
+else:
+    APP_DIR = BASE_DIR
+
+def load_external_module(module_name, file_name):
+    """Dynamically load a python file overriding any bundled versions."""
+    file_path = os.path.join(APP_DIR, file_name)
+    if os.path.exists(file_path):
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, file_path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+            logger.info(f"✅ Loaded external override for module: {module_name}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to load external module {module_name}: {e}")
+    return False
+
+# Attempt to load external configs BEFORE they are imported by anything else
+load_external_module("config", "config.py")
+load_external_module("control_service", "control_service.py")
+
 # --- IMPORTS ---
 import config
 import database
