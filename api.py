@@ -41,7 +41,7 @@ def save_system_state():
         with open(STATE_FILE, 'w') as f:
             json.dump(state, f, indent=4)
     except Exception as e:
-        print(f"⚠️ Failed to save state: {e}")
+        print(f"Failed to save state: {e}")
 
 
 def load_system_state():
@@ -56,13 +56,13 @@ def load_system_state():
             config.SELECTED_STRATEGY = state.get("selected_strategy", "AI")
 
             print(
-                f"🔄 System State Restored: Mode={config.CONTROL_MODE}, Strategy={config.SELECTED_STRATEGY}, Test={config.TEST_MODE}")
+                f"System State Restored: Mode={config.CONTROL_MODE}, Strategy={config.SELECTED_STRATEGY}, Test={config.TEST_MODE}")
 
             if config.CONTROL_MODE > 0:
                 control_service.service.set_enabled(True)
 
     except Exception as e:
-        print(f"⚠️ Failed to load state: {e}")
+        print(f"Failed to load state: {e}")
 
 
 # Load state immediately when API initializes
@@ -97,7 +97,7 @@ def toggle_autopilot():
                 config.CONTROL_MODE = 1
                 msg = "Engaged: Neural Network Control"
 
-            # === 🔴 START OF CHANGED BLOCK ===
+            # === START OF CHANGED BLOCK ===
             elif strategy == 'FINGERPRINT':
                 config.CONTROL_MODE = 2
 
@@ -117,11 +117,11 @@ def toggle_autopilot():
                         try:
                             os.remove(TARGET_FILE)
                         except Exception as e:
-                            print(f"⚠️ Warning: Could not remove old target file: {e}")
+                            print(f"Warning: Could not remove old target file: {e}")
 
                     config.FINGERPRINT_MODE_TYPE = 'AUTO'
                     msg = "Engaged: Fingerprint Auto-Search"
-            # === 🟢 END OF CHANGED BLOCK ===
+            # === END OF CHANGED BLOCK ===
 
             else:
                 config.CONTROL_MODE = 0
@@ -132,7 +132,7 @@ def toggle_autopilot():
         if config.TEST_MODE:
             msg += " [TEST MODE ACTIVE]"
 
-        print(f"✅ SYSTEM {msg}")
+        print(f"SYSTEM {msg}")
         save_system_state()
 
         return jsonify({

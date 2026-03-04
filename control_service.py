@@ -41,7 +41,7 @@ class ControlService:
                     self.client.get_node(ua.NodeId(ua.ObjectIds.Server_ServerStatus_CurrentTime)).get_value()
                     return True
                 except:
-                    logger.warning("⚠️ Connection lost. Reconnecting...")
+                    logger.warning("Connection lost. Reconnecting...")
                     self.connected = False
                     try:
                         self.client.disconnect()
@@ -53,16 +53,16 @@ class ControlService:
             self.client = Client(self.url)
             self.client.connect()
             self.connected = True
-            logger.info(f"✅ Control Service Connected: {self.url}")
+            logger.info(f"Control Service Connected: {self.url}")
             return True
 
         except Exception as e:
             # Smart Error Logging
             if "BadTooManySessions" in str(e):
-                logger.error("❌ PLC Server Full. Pausing for 10s. (Please restart PLC Simulator)")
+                logger.error("PLC Server Full. Pausing for 10s. (Please restart PLC Simulator)")
                 self.retry_delay = 10
             else:
-                logger.error(f"❌ PLC Connection Failed: {e}")
+                logger.error(f"PLC Connection Failed: {e}")
                 self.retry_delay = 5
 
             self.connected = False
@@ -82,7 +82,7 @@ class ControlService:
         """Enables or disables the writing logic based on UI Button."""
         self.enabled = active
         status = "ENABLED" if active else "DISABLED"
-        logger.info(f"🔒 PLC Write Permission Set To: {status}")
+        logger.info(f"PLC Write Permission Set To: {status}")
 
     # -----------------------------
 
@@ -121,7 +121,7 @@ class ControlService:
         """
         Writes setpoints to the PLC, but ONLY if Autopilot is enabled.
         """
-        # 🛑 The Gatekeeper
+        # The Gatekeeper
         if not self.enabled:
             return False
 
@@ -157,7 +157,7 @@ class ControlService:
                     # Setpoints are Float/Double
                     node.set_value(ua.DataValue(ua.Variant(float(val), ua.VariantType.Float)))
 
-            logger.info(f"✅ PLC WRITE: Sent {len(actions)} setpoints.")
+            logger.info(f"PLC WRITE: Sent {len(actions)} setpoints.")
             return True
 
         except Exception as e:

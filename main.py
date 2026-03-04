@@ -106,15 +106,15 @@ app.config.from_object('config')
 # Note: We use config.CONTROL_MODE instead of a local variable now.
 
 def initialize_system():
-    logger.info("🚀 System Initializing...")
+    logger.info("System Initializing...")
 
     # 1. Force Config Load with Absolute Path
     # Use config.APP_DIR to ensure it references the executable path, not the temp _MEIPASS folder.
     target_config_path = os.path.join(config.APP_DIR, 'files', 'json', 'model_config.json')
-    logger.info(f"📂 Target Config Path: {target_config_path}")
+    logger.info(f"Target Config Path: {target_config_path}")
 
     if not os.path.exists(target_config_path):
-        logger.error(f"❌ CRITICAL: Config file DOES NOT EXIST at {target_config_path}")
+        logger.error(f"CRITICAL: Config file DOES NOT EXIST at {target_config_path}")
     else:
         # Force the config module to use this specific path
         config.MODEL_CONFIG_PATH = target_config_path
@@ -125,7 +125,7 @@ def initialize_system():
     inds = process_model.get_indicator_variables()
     total_vars = len(ctrls) + len(inds)
 
-    logger.info(f"🔍 Variables Loaded: {len(ctrls)} Controls + {len(inds)} Indicators = {total_vars} Total")
+    logger.info(f"Variables Loaded: {len(ctrls)} Controls + {len(inds)} Indicators = {total_vars} Total")
 
     # 3. Load History
     try:
@@ -135,16 +135,15 @@ def initialize_system():
         # Changed: Use the Parquet auto-optimizer instead of hard-loading CSV
         df = fingerprint_engine.robust_read_csv(csv_path)
 
-        # === 🚀 DATE FIX APPLIED HERE ===
+        # === DATE FIX APPLIED HERE ===
         if config.TIMESTAMP_COLUMN in df.columns:
-            # Explicitly tell Pandas that dates are Day-Month-Year (e.g. 13-08-2025)
-            # The parquet conversion usually retains the type, but this is a safe fallback
-            df[config.TIMESTAMP_COLUMN] = pd.to_datetime(df[config.TIMESTAMP_COLUMN], format="%Y-%m-%d %H:%M:%S", errors='ignore')
+            # Let Pandas dynamically infer the datetime format to prevent strict assertion errors
+            df[config.TIMESTAMP_COLUMN] = pd.to_datetime(df[config.TIMESTAMP_COLUMN], format='mixed', errors='coerce')
 
         app.config['df_fingerprint'] = df
-        logger.info(f"✅ History Loaded: {len(df)} rows")
+        logger.info(f"History Loaded: {len(df)} rows")
     except Exception as e:
-        logger.error(f"⚠️ History Load Failed: {e}")
+        logger.error(f"History Load Failed: {e}")
         app.config['df_fingerprint'] = pd.DataFrame()
 
 
