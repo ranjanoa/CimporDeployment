@@ -108,23 +108,34 @@ def get_model_config_safe():
 # 2. LOW-LEVEL HELPERS
 # ==============================================================================
 def robust_read_csv(file_path):
+    parquet_path = file_path.replace('.csv', '.parquet')
     try:
+        # Load lightning fast Parquet if available
+        if os.path.exists(parquet_path):
+            df = pd.read_parquet(parquet_path)
+            engine_logger.info(f"Loaded Parquet file instantly with {len(df)} rows.")
+            return df
+            
         if not os.path.exists(file_path):
-            engine_logger.warning(f"CSV file not found at: {file_path}")
+            engine_logger.warning(f"Data file not found at: {file_path}")
             return pd.DataFrame()
+            
+        # Fallback to slow CSV if Parquet doesn't exist
+        engine_logger.info("First time loading CSV. This will take a moment before optimizing...")
         df = pd.read_csv(file_path)
         df.columns = [str(c).strip() for c in df.columns]
-        for col in df.columns:
-            if df[col].dtype == 'object':
-                try:
-                    df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                    df[col] = pd.to_numeric(df[col], errors='ignore')
-                except ValueError:
-                    continue
+        
+        # Save as Parquet for future rapid loads
+        try:
+            df.to_parquet(parquet_path, engine='pyarrow')
+            engine_logger.info(f"Optimized history and saved Parquet file to {parquet_path}")
+        except Exception as pe:
+            engine_logger.warning(f"Could not save Parquet file: {pe} (Install pyarrow or fastparquet to enable caching).")
+            
         engine_logger.info(f"Loaded CSV with {len(df)} rows.")
         return df
     except Exception as e:
-        engine_logger.error(f"CSV Read Error: {e}")
+        engine_logger.error(f"Data Read Error: {e}")
         return pd.DataFrame()
 
 

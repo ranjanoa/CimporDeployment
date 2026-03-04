@@ -278,6 +278,7 @@ def automated_control_loop():
 
                 # If stalled, skip calculation but keep loop alive
                 if is_stalled:
+                    socketio.sleep(FAST_CYCLE_SECONDS)
                     continue
 
                 if current_mode > 0:
@@ -292,6 +293,7 @@ def automated_control_loop():
                 if real_df.empty and is_test and app.config.get('df_fingerprint') is not None:
                     real_df = app.config['df_fingerprint'].iloc[-30:].copy()
                 elif real_df.empty:
+                    socketio.sleep(FAST_CYCLE_SECONDS)
                     continue
 
                 if not real_df.empty:
