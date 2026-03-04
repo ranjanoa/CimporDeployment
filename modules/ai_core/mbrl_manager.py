@@ -93,16 +93,23 @@ def _initialize_system():
     required_cols = list(set(s_cols + a_cols))
 
     try:
+    try:
         # --- ROBUST DATA LOADING ---
-        header_df = pd.read_csv(config.HISTORICAL_DATA_CSV_PATH, nrows=0)
-        existing_cols = header_df.columns.tolist()
-        valid_cols = [c for c in required_cols if c in existing_cols]
-
-        if not valid_cols:
-            print("⚠️ No matching columns in CSV. Creating dummy stats.")
+        from fingerprint_engine import robust_read_csv
+        df_full = robust_read_csv(config.HISTORICAL_DATA_CSV_PATH)
+        
+        if df_full.empty:
+            print("⚠️ No data loaded. Creating dummy stats.")
             df_train = pd.DataFrame(columns=required_cols)
         else:
-            df_train = pd.read_csv(config.HISTORICAL_DATA_CSV_PATH, usecols=valid_cols)
+            existing_cols = df_full.columns.tolist()
+            valid_cols = [c for c in required_cols if c in existing_cols]
+            
+            if not valid_cols:
+                print("⚠️ No matching columns in Data. Creating dummy stats.")
+                df_train = pd.DataFrame(columns=required_cols)
+            else:
+                df_train = df_full[valid_cols]
 
         for c in required_cols:
             if c not in df_train.columns:
@@ -560,13 +567,14 @@ def train_system_offline():
     print(f"🔍 Expected {len(required_cols)} target tags from model_config.json")
 
     try:
-        header_df = pd.read_csv(config.HISTORICAL_DATA_CSV_PATH, nrows=0)
-        existing_cols = header_df.columns.tolist()
+        from fingerprint_engine import robust_read_csv
+        df_full = robust_read_csv(config.HISTORICAL_DATA_CSV_PATH)
+        existing_cols = df_full.columns.tolist()
 
         valid_cols = [c for c in required_cols if c in existing_cols]
         missing_cols = [c for c in required_cols if c not in existing_cols]
 
-        print(f"✅ Found {len(valid_cols)} matching columns in the CSV headers.")
+        print(f"✅ Found {len(valid_cols)} matching columns in the Data headers.")
 
         # 1. LOG MISSING COLUMNS
         if missing_cols:
@@ -578,7 +586,7 @@ def train_system_offline():
             return
 
         print("⏳ Loading full dataset...")
-        df = pd.read_csv(config.HISTORICAL_DATA_CSV_PATH, usecols=valid_cols)
+        df = df_full[valid_cols]
         print(f"📊 Dataset loaded successfully. Shape: {df.shape}")
 
         # 2. LOG DATA TYPES (European Comma Check)

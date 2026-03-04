@@ -132,12 +132,14 @@ def initialize_system():
         csv_path = os.path.join(config.APP_DIR, 'files', 'data', 'fingerprint4.csv')
         config.HISTORICAL_DATA_CSV_PATH = csv_path
 
-        df = pd.read_csv(csv_path)
+        # Changed: Use the Parquet auto-optimizer instead of hard-loading CSV
+        df = fingerprint_engine.robust_read_csv(csv_path)
 
         # === 🚀 DATE FIX APPLIED HERE ===
         if config.TIMESTAMP_COLUMN in df.columns:
             # Explicitly tell Pandas that dates are Day-Month-Year (e.g. 13-08-2025)
-            df[config.TIMESTAMP_COLUMN] = pd.to_datetime(df[config.TIMESTAMP_COLUMN], format="%Y-%m-%d %H:%M:%S")
+            # The parquet conversion usually retains the type, but this is a safe fallback
+            df[config.TIMESTAMP_COLUMN] = pd.to_datetime(df[config.TIMESTAMP_COLUMN], format="%Y-%m-%d %H:%M:%S", errors='ignore')
 
         app.config['df_fingerprint'] = df
         logger.info(f"✅ History Loaded: {len(df)} rows")
