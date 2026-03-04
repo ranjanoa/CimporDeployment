@@ -93,7 +93,6 @@ def _initialize_system():
     required_cols = list(set(s_cols + a_cols))
 
     try:
-    try:
         # --- ROBUST DATA LOADING ---
         from fingerprint_engine import robust_read_csv
         df_full = robust_read_csv(config.HISTORICAL_DATA_CSV_PATH)
