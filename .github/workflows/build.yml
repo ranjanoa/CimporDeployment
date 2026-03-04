@@ -36,6 +36,8 @@ jobs:
           --hidden-import "engineio.async_drivers.eventlet" `
           --hidden-import "engineio.async_drivers.gevent" `
           --hidden-import "eventlet" `
+          --hidden-import "pyarrow" `
+          --hidden-import "fastparquet" `
           main.py
 
     - name: Upload Artifact
