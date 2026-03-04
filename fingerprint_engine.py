@@ -760,6 +760,10 @@ def rank_and_select_recommendations(historical_df, candidates, weights=None, cur
     if ts_col in df.columns: df[ts_col] = pd.to_datetime(df[ts_col], errors='coerce')
     penalty_weight = float(kwargs.get('distance_penalty', 1000.0))
 
+    if len(df) > 2000:
+        engine_logger.info(f"--- [SCAN] Down-sampling {len(df)} candidates to 2000 for instant ranking ---")
+        df = df.sample(n=2000, random_state=42).copy()
+
     def _legacy_score_wrapper(row):
         return _calculate_core_score(
             row, current_state, controls_cfg, weights,
