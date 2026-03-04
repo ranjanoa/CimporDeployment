@@ -230,7 +230,6 @@ def get_cached_dataframe(controls_cfg, indicators_cfg):
         ts_col = get_timestamp_col()
         if ts_col in hist_df.columns:
             hist_df[ts_col] = pd.to_datetime(hist_df[ts_col], format="%Y-%m-%d %H:%M:%S", errors='coerce')
-        hist_df = pre_calculate_slopes(hist_df, controls_cfg)
         CACHE_DF = hist_df
         CACHE_MTIME = current_mtime
         CACHE_COV = None
@@ -431,12 +430,12 @@ def find_best_fingerprint_advanced(current_real_df_window, historical_df, fronte
             else:
                 eff_min, eff_max = abs_min, abs_max
 
+            if eff_min > eff_max:
+                engine_logger.warning(f"Impossible range for {tag}: {eff_min} to {eff_max}. Adjusting limits.")
+                eff_min, eff_max = min(eff_min, eff_max), max(eff_min, eff_max)
+
             # 2. Apply Filters
-            # We filter by Absolute first
-            valid_history = valid_history[valid_history[tag].between(abs_min, abs_max)]
-            # Then by Tolerance if applicable
-            if cur_val != 0:
-                valid_history = valid_history[valid_history[tag].between(tol_min, tol_max)]
+            valid_history = valid_history[valid_history[tag].between(eff_min, eff_max)]
 
             # 3. Log similar to Manual Scan: Filter Name [Min-Max]: Removed X rows.
             dropped = prev_count - len(valid_history)
@@ -446,6 +445,10 @@ def find_best_fingerprint_advanced(current_real_df_window, historical_df, fronte
 
             active_constraints[tag] = strategy
             active_tags.append(tag)
+
+            if valid_history.empty:
+                engine_logger.warning(f"Filter {tag} dropped ALL rows. Aborting further filtering.")
+                break
         except:
             continue
 
@@ -635,6 +638,7 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
                     engine_logger.info(f"[AUTO] New Target Found: {CACHED_AUTO_RESULT['target_disp']}")
                 else:
                     engine_logger.warning("[AUTO] No matches found. Keeping previous target.")
+                    LAST_AUTO_SCAN_TIME = now  # <--- CRITICAL FIX: Ensure cool down even on failure
 
             else:
                 # -> USE CACHE (Fast Loop)

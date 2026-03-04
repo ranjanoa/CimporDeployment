@@ -344,6 +344,7 @@ def on_connect():
     global thread
     with thread_lock:
         if thread is None:
+            thread = True  # Mark thread as started to prevent explosion
             socketio.start_background_task(background_data_emitter)
             socketio.start_background_task(automated_control_loop)
 
