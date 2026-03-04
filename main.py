@@ -283,7 +283,7 @@ def automated_control_loop():
                     continue
 
                 if current_mode > 0:
-                    logger.info(f"⚡ Starting Optimization Cycle. Mode: {current_mode}")
+                    logger.info(f"Starting Optimization Cycle. Mode: {current_mode}")
 
                 end_time = datetime.utcnow()
                 start_time = end_time - timedelta(minutes=30)

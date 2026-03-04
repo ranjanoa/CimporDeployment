@@ -288,8 +288,10 @@ def simulate_what_if(history_df, manual_controls, target_var, steps=60):
 
         try:
             target_idx = s_cols.index(target_var)
-        except:
-            return []
+        except ValueError:
+            # If the target variable isn't in the state space directly (e.g. an Indicator)
+            # return a flatline array so the graph doesn't crash on the frontend.
+            return [float(history_df[target_var].iloc[-1]) if target_var in history_df.columns else 0.0] * steps
 
         for _ in range(steps):
             inp = torch.tensor([curr_obs], dtype=torch.float32).to(device)
