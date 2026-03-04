@@ -757,21 +757,54 @@ def rank_and_select_recommendations(historical_df, candidates, weights=None, cur
     else:
         return []
     if df.empty: return []
-    if ts_col in df.columns: df[ts_col] = pd.to_datetime(df[ts_col], errors='coerce')
-    penalty_weight = float(kwargs.get('distance_penalty', 1000.0))
+    # FAST VECTORIZED SCORING (Replacing slow df.apply loop)
+    # 1. Base weights scoring
+    df['score'] = 0.0
+    if weights:
+        for tag, w in weights.items():
+            if tag in df.columns:
+                df['score'] += df[tag].fillna(0) * w
 
-    if len(df) > 2000:
-        engine_logger.info(f"--- [SCAN] Down-sampling {len(df)} candidates to 2000 for instant ranking ---")
-        df = df.sample(n=2000, random_state=42).copy()
+    # 2. Distance Penalty Scoring
+    if isinstance(current_state, dict):
+        dist_sum = pd.Series(0.0, index=df.index)
+        
+        for tag, props in active_constraints.items() if active_constraints else controls_cfg.items():
+            if tag not in df.columns: continue
+                
+            try:
+                # Discard rows strictly out of bounds
+                user_min = float(props.get('min', props.get('Min', props.get('default_min', -9e9))))
+                user_max = float(props.get('max', props.get('Max', props.get('default_max', 9e9))))
+                
+                out_of_bounds = (df[tag] < user_min) | (df[tag] > user_max)
+                df.loc[out_of_bounds, 'score'] = -999999.9
+                    
+                prio = int(props.get('priority', 3))
+                curr_val = float(current_state.get(tag, 0))
+                
+                if curr_val != 0:
+                    weight = {1: 10.0, 2: 5.0}.get(prio, 1.0)
+                    
+                    # Vectorized magnitude alignment
+                    hist_vals = df[tag].copy()
+                    ratios = np.abs(curr_val / hist_vals.replace(0, np.nan))
+                    hist_vals = np.where((ratios > 800) & (ratios < 1200), hist_vals * 1000.0, hist_vals)
+                    hist_vals = np.where((ratios > 0.0008) & (ratios < 0.0012), hist_vals / 1000.0, hist_vals)
+                    hist_vals = np.where((ratios > 80) & (ratios < 120), hist_vals * 100.0, hist_vals)
+                    
+                    dist_sum += ((np.abs(curr_val - hist_vals) / curr_val) ** 2) * weight
+                    
+            except Exception:
+                continue
 
-    def _legacy_score_wrapper(row):
-        return _calculate_core_score(
-            row, current_state, controls_cfg, weights,
-            penalty_weight=penalty_weight,
-            is_advanced=True
-        )
+        df['score'] -= (dist_sum * penalty_weight)
 
-    df['score'] = df.apply(_legacy_score_wrapper, axis=1)
+    # 3. Time Penalty (Age Decay)
+    if ts_col in df.columns:
+        now = pd.Timestamp.now()
+        age_days = (now - df[ts_col]).dt.total_seconds() / 86400.0
+        df['score'] -= (age_days.fillna(0) * 0.05)
     df = df.sort_values(by=['score'], ascending=False)
     stable_candidates = []
     unstable_candidates = []
