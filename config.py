@@ -23,6 +23,9 @@ else:
 CONTROL_MODE = 0
 TEST_MODE = False
 
+# PLC Connection Requirement (True to require PLC for setpoint generation, False to generate without PLC)
+REQUIRE_PLC = False
+
 # Fingerprint Sub-Mode: 'AUTO' (Search CSV) or 'MANUAL' (Locked on Target)
 FINGERPRINT_MODE_TYPE = 'AUTO'
 

@@ -5,7 +5,7 @@ import time
 try:
     from opcua import Client, ua
 except ImportError:
-    print("⚠️ Warning: 'opcua' library not found. Install with: pip install opcua")
+    print("Warning: 'opcua' library not found. Install with: pip install opcua")
     Client = None
     ua = None
 
@@ -133,7 +133,14 @@ class ControlService:
         Used for Manual Batch Selection from UI.
         """
         if not actions: return True
-        if not self.connect(): return False
+        
+        connected = self.connect()
+        if not connected:
+            if getattr(config, 'REQUIRE_PLC', True):
+                return False
+            else:
+                logger.info(f"PLC not connected (REQUIRE_PLC=False). Skipping OPC write but simulating success for {len(actions)} setpoints.")
+                return True
 
         try:
             import process_model
