@@ -517,7 +517,9 @@ def find_best_fingerprint_advanced(current_real_df_window, historical_df, fronte
 # --- GLOBAL CACHE FOR AUTO MODE ---
 LAST_AUTO_SCAN_TIME = None
 CACHED_AUTO_RESULT = None
-SCAN_INTERVAL_SECONDS = 300  # 5 Minutes
+
+def get_scan_interval():
+    return getattr(config, 'SCAN_INTERVAL_SECONDS', 300)
 
 
 def calculate_kpis(current_state):
@@ -633,7 +635,7 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
             # --- AUTO: Check Timer ---
             time_since_last = (now - LAST_AUTO_SCAN_TIME).total_seconds() if LAST_AUTO_SCAN_TIME else 99999
 
-            if time_since_last >= SCAN_INTERVAL_SECONDS or CACHED_AUTO_RESULT is None:
+            if time_since_last >= get_scan_interval() or CACHED_AUTO_RESULT is None:
                 # -> TIME TO SCAN (Every 5 mins)
                 engine_logger.info(f"=== CYCLE START | Mode: AUTO [SCANNING NEW TARGET] ===")
 
@@ -661,7 +663,7 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
             else:
                 # -> USE CACHE (Fast Loop)
                 engine_logger.info(f"=== CYCLE START | Mode: AUTO [USING CACHED TARGET] ===")
-                engine_logger.info(f"Next scan in {int(SCAN_INTERVAL_SECONDS - time_since_last)} seconds.")
+                engine_logger.info(f"Next scan in {int(get_scan_interval() - time_since_last)} seconds.")
 
             # Load from Cache if available
             if CACHED_AUTO_RESULT:

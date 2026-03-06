@@ -205,9 +205,9 @@ def automated_control_loop():
     loop_counter = 0
     watchdog_val = 0
 
-    # Timers
-    AI_INTERVAL_SECONDS = 30
-    FAST_CYCLE_SECONDS = 2
+    # Timers pulled from config with safe fallbacks
+    AI_INTERVAL_SECONDS = getattr(config, 'AI_INTERVAL_SECONDS', 30)
+    FAST_CYCLE_SECONDS = getattr(config, 'FAST_CYCLE_SECONDS', 2)
 
     # SAFETY THRESHOLD (Adjust as needed)
     MAX_DATA_DELAY_SECONDS = 120

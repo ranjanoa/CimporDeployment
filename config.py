@@ -67,7 +67,19 @@ SIMILARITY_MINUS_LOWER_PCT = 0.90
 SIMILARITY_MINUS_UPPER_PCT = 1.10
 
 # ==============================================================================
-# 4. FILE PATHS
+# 4. TIMERS & DELAYS
+# ==============================================================================
+# The baseline interval for sending logic actions to the PLC (NN and Fingerprint nudges)
+AI_INTERVAL_SECONDS = 30  
+
+# The fast loop tick interval for updating the heartbeat/watchdog
+FAST_CYCLE_SECONDS = 2    
+
+# The delay between deep historical dataset scans in Fingerprint AUTO mode
+SCAN_INTERVAL_SECONDS = 300
+
+# ==============================================================================
+# 5. FILE PATHS
 # ==============================================================================
 LOG_DIR = os.path.join(APP_DIR, "files", "logs")
 JSON_DIR = os.path.join(APP_DIR, "files", "json")
