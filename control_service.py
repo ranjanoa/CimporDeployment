@@ -62,7 +62,8 @@ class ControlService:
                 logger.error("PLC Server Full. Pausing for 10s. (Please restart PLC Simulator)")
                 self.retry_delay = 10
             else:
-                logger.error(f"PLC Connection Failed: {e}")
+                if getattr(config, 'REQUIRE_PLC', True):
+                    logger.error(f"PLC Connection Failed: {e}")
                 self.retry_delay = 5
 
             self.connected = False
