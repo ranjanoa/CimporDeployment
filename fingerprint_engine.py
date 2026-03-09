@@ -890,20 +890,22 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
             tgt = align_magnitude(float(target_vals.get(tag, curr)), curr)
 
             gap = tgt - curr
-            step = gap * step_fraction
+            
+            # Use variable-specific nudge_speed (expert-tuned in JSON) or global step_fraction
+            var_speed = cfg_var.get('nudge_speed', step_fraction)
+            step = gap * var_speed
 
-            # Enforce minimum step — but NEVER allow a full jump (allow_full_jump=False)
-            if abs(step) < abs(curr) * min_step_fraction:
-                if allow_full_jump:
-                    step = gap  # Only if explicitly permitted by config
-                else:
-                    step = gap * min_step_fraction  # Gradual minimum nudge
+            min_absolute_nudge = abs(curr) * min_step_fraction
+            if abs(step) < min_absolute_nudge and not allow_full_jump:
+                # Clamp to the minimum but only if move is necessary
+                if abs(gap) > 0.01:
+                    step = (min_absolute_nudge if gap > 0 else -min_absolute_nudge)
 
             ui_actions.append({
                 "var_name": tag,
                 "fingerprint_set_point": curr + step,
                 "current_setpoint": str(curr),
-                "reason": f"{reason} (Nudging)"
+                "reason": f"{reason} (Nudging @ {var_speed*100:.1f}%)"
             })
 
         return {

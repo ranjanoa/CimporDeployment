@@ -18,7 +18,8 @@
       "is_setpoint": true,
       "priority": 3,
       "tag_name": "Dividing gate position Cyclone 3",
-      "unit": "%"
+      "unit": "%",
+      "nudge_speed": 0.05
     },
     "Fan Gas Flow": {
       "aipc": true,
@@ -38,7 +39,8 @@
       "is_setpoint": true,
       "priority": 3,
       "tag_name": "Fan Speed",
-      "unit": "rpm"
+      "unit": "rpm",
+      "nudge_speed": 0.1
     },
     "Filter Fan Motor Speed": {
       "aipc": true,
@@ -48,7 +50,8 @@
       "is_setpoint": true,
       "priority": 4,
       "tag_name": "Filter Fan Motor Speed",
-      "unit": "rpm"
+      "unit": "rpm",
+      "nudge_speed": 0.08
     },
     "ID Fan Speed": {
       "aipc": true,
@@ -58,7 +61,8 @@
       "is_setpoint": true,
       "priority": 2,
       "tag_name": "ID Fan Speed",
-      "unit": "rpm"
+      "unit": "rpm",
+      "nudge_speed": 0.1
     },
     "Liquid Alternative Mass Flow Actual MainBurner": {
       "aipc": true,
@@ -68,7 +72,8 @@
       "is_setpoint": true,
       "priority": 4,
       "tag_name": "Liquid Alternative Mass Flow Actual MainBurner",
-      "unit": "l/h"
+      "unit": "l/h",
+      "nudge_speed": 0.05
     },
     "Mass Flow Actual Solid 1 CalcinerBurner": {
       "aipc": true,
@@ -78,7 +83,8 @@
       "is_setpoint": true,
       "priority": 1,
       "tag_name": "Mass Flow Actual Solid 1 CalcinerBurner",
-      "unit": "t/h"
+      "unit": "t/h",
+      "nudge_speed": 0.05
     },
     "Mass Flow Actual Solid 2 CalcinerBurner": {
       "aipc": true,
@@ -88,7 +94,8 @@
       "is_setpoint": true,
       "priority": 1,
       "tag_name": "Mass Flow Actual Solid 2 CalcinerBurner",
-      "unit": "t/h"
+      "unit": "t/h",
+      "nudge_speed": 0.05
     },
     "Position flap": {
       "aipc": true,
@@ -98,7 +105,8 @@
       "is_setpoint": true,
       "priority": 3,
       "tag_name": "Position flap",
-      "unit": "%"
+      "unit": "%",
+      "nudge_speed": 0.08
     },
     "Solid Alternative Mass Flow Actual MainBurner": {
       "aipc": true,
@@ -108,7 +116,8 @@
       "is_setpoint": true,
       "priority": 1,
       "tag_name": "Solid Alternative Mass Flow Actual MainBurner",
-      "unit": "t/h"
+      "unit": "t/h",
+      "nudge_speed": 0.05
     },
     "Solid Fossil Mass Flow Actual CalcinerBurner": {
       "aipc": true,
@@ -118,7 +127,8 @@
       "is_setpoint": true,
       "priority": 1,
       "tag_name": "Solid Fossil Mass Flow Actual CalcinerBurner",
-      "unit": "t/h"
+      "unit": "t/h",
+      "nudge_speed": 0.05
     },
     "Solid Fossil Mass flow Actual MainBurner": {
       "aipc": true,
@@ -128,7 +138,8 @@
       "is_setpoint": true,
       "priority": 1,
       "tag_name": "Solid Fossil Mass flow Actual MainBurner",
-      "unit": "t/h"
+      "unit": "t/h",
+      "nudge_speed": 0.05
     },
     "Speed Actual Stroke central grille 1": {
       "aipc": false,
@@ -188,7 +199,8 @@
       "is_setpoint": true,
       "priority": 1,
       "tag_name": "Weighfeeder Mass Flow",
-      "unit": "t/h"
+      "unit": "t/h",
+      "nudge_speed": 0.02
     }
   },
   "indicator_variables": {
@@ -622,8 +634,8 @@
   "nudge_settings": {
     "allow_full_jump": false,
     "comment": "Controls how setpoints are nudged each cycle. step_fraction = fraction of the gap to close per cycle. No full-jump fallback allowed.",
-    "min_step_fraction": 0.005,
-    "step_fraction": 0.15
+    "min_step_fraction": 0.002,
+    "step_fraction": 0.05
   },
   "golden_prefilter": {
     "comment": "Pre-filter applied BEFORE fingerprint search to exclude startup, shutdown and upset periods. Reduces search space from ~100% to ~20% of dataset, dramatically improving match quality.",
