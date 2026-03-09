@@ -480,9 +480,9 @@
       "priority": 2,
       "tag_name": "T mat out Cyclone 4B 2"
     },
-    "T termographic Burning Zone": {
+    "T Burning Zone 1": {
       "priority": 1,
-      "tag_name": "T termographic Burning Zone"
+      "tag_name": "T Burning Zone 1"
     },
     "Tertiary Air Delta P 1": {
       "priority": 2,
@@ -517,7 +517,7 @@
     "stability_lookahead": 30,
     "stability_tags": [
       {
-        "tag": "T termographic Burning Zone",
+        "tag": "T Burning Zone 1",
         "threshold_pct": 0.03
       },
       {
@@ -596,7 +596,7 @@
       "low_o2_id_fan_enabled": false
     },
     "tags": {
-      "bzt": "T termographic Burning Zone",
+      "bzt": "T Burning Zone 1",
       "c3_co": "CO Outlet cyclone 3",
       "c3_o2": "O2 Outlet cyclone 3",
       "c4_temp": "T gas outlet Cyclone 4A",
@@ -640,7 +640,7 @@
   "optimisation_target": {
     "co_targets": [
       {
-        "tag": "T termographic Burning Zone",
+        "tag": "T Burning Zone 1",
         "min": 1280,
         "max": 1400,
         "weight": 0.4
@@ -663,7 +663,7 @@
       "action_value": -0.3,
       "action_var": "Solid Fossil Mass flow Actual MainBurner",
       "comment": "Reduce main burner fuel gradually by max ramp_rate t/h per cycle. No step change allowed.",
-      "condition_var": "T termographic Burning Zone",
+      "condition_var": "T Burning Zone 1",
       "name": "BZT Critical High",
       "operator": ">",
       "priority": 0,
