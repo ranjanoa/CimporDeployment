@@ -813,6 +813,33 @@
           "threshold_pct": 0.05
         }
       ]
+    },
+    "USER_DEFINED": {
+      "description": "Custom strategy template. Add your own targets and filters here.",
+      "optimisation_target": {
+        "primary_tag": "Motor 1 Current",
+        "primary_min": 280,
+        "primary_max": 300,
+        "co_targets": [
+          {
+            "tag": "T Burning Zone 1",
+            "min": 1300,
+            "max": 1380,
+            "weight": 0.5
+          }
+        ]
+      },
+      "golden_prefilter": {
+        "Weighfeeder Mass Flow": {
+          "min": 250
+        }
+      },
+      "stability_tags": [
+        {
+          "tag": "T Burning Zone 1",
+          "threshold_pct": 0.05
+        }
+      ]
     }
   },
   "kpi_tags": {

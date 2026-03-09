@@ -725,6 +725,7 @@ def check_disturbance_rules(current_state):
                     "match_score": "SAFETY-CLAMP",
                     "timestamp": str(pd.Timestamp.now()),
                     "actions": [{"var_name": tgt, "fingerprint_set_point": new_v,
+                                 "current_setpoint": str(curr),
                                  "reason": f"SAFETY: {rule['name']} (gradual)"}]
                 }
     except Exception as e:
