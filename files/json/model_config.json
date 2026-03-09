@@ -480,10 +480,6 @@
       "priority": 2,
       "tag_name": "T mat out Cyclone 4B 2"
     },
-    "T Burning Zone 1": {
-      "priority": 1,
-      "tag_name": "T Burning Zone 1"
-    },
     "Tertiary Air Delta P 1": {
       "priority": 2,
       "tag_name": "Tertiary Air Delta P 1"
@@ -522,23 +518,15 @@
       },
       {
         "tag": "T gas 1 Secondary Air",
-        "threshold_pct": 0.04
+        "threshold_pct": 0.05
       },
       {
         "tag": "O2 Outlet cyclone 3",
-        "threshold_pct": 0.10
-      },
-      {
-        "tag": "CO Smoke Chamber",
-        "threshold_pct": 0.15
-      },
-      {
-        "tag": "CaOlivre",
-        "threshold_pct": 0.05
+        "threshold_pct": 0.2
       },
       {
         "tag": "Motor 1 Current",
-        "threshold_pct": 0.05
+        "threshold_pct": 0.08
       }
     ],
     "strict_filter_priority": 1
