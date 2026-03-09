@@ -669,5 +669,192 @@
       "threshold": 1400
     }
   ],
-  "version": "22.0"
+  "version": "22.0",
+  "active_strategy": "TSR_MAX",
+  "strategies": {
+    "TSR_MAX": {
+      "description": "Maximise alternative fuel use (TSR) without raising SHC above baseline. Switch to SHC_MIN to target thermal efficiency instead.",
+      "optimisation_target": {
+        "primary_tag": "% TSR Kiln Inst",
+        "primary_min": 50,
+        "primary_max": 999,
+        "co_targets": [
+          {
+            "tag": "Motor 1 Current",
+            "min": 280,
+            "max": 300,
+            "weight": 0.3
+          },
+          {
+            "tag": "T Burning Zone 1",
+            "min": 1280,
+            "max": 1400,
+            "weight": 0.2
+          },
+          {
+            "tag": "Specfical Heat Consumption Inst",
+            "min": 0,
+            "max": 860,
+            "weight": -0.4
+          }
+        ]
+      },
+      "golden_prefilter": {
+        "Motor 1 Current": {
+          "min": 260,
+          "max": 320
+        },
+        "Weighfeeder Mass Flow": {
+          "min": 200
+        },
+        "% TSR Kiln Inst": {
+          "min": 44
+        },
+        "Specfical Heat Consumption Inst": {
+          "max": 870
+        }
+      },
+      "stability_tags": [
+        {
+          "tag": "T Burning Zone 1",
+          "threshold_pct": 0.03
+        },
+        {
+          "tag": "T gas 1 Secondary Air",
+          "threshold_pct": 0.05
+        },
+        {
+          "tag": "O2 Outlet cyclone 3",
+          "threshold_pct": 0.2
+        },
+        {
+          "tag": "Motor 1 Current",
+          "threshold_pct": 0.08
+        },
+        {
+          "tag": "% TSR Kiln Inst",
+          "threshold_pct": 0.1
+        }
+      ]
+    },
+    "SHC_MIN": {
+      "description": "Minimise specific heat consumption (SHC) without reducing TSR below baseline. Switch to TSR_MAX to target alternative fuel maximisation instead.",
+      "optimisation_target": {
+        "primary_tag": "Specfical Heat Consumption Inst",
+        "primary_min": 0,
+        "primary_max": 800,
+        "co_targets": [
+          {
+            "tag": "Motor 1 Current",
+            "min": 280,
+            "max": 300,
+            "weight": 0.3
+          },
+          {
+            "tag": "T Burning Zone 1",
+            "min": 1280,
+            "max": 1400,
+            "weight": 0.2
+          },
+          {
+            "tag": "% TSR Kiln Inst",
+            "min": 44,
+            "max": 999,
+            "weight": 0.4
+          }
+        ]
+      },
+      "golden_prefilter": {
+        "Motor 1 Current": {
+          "min": 260,
+          "max": 320
+        },
+        "Weighfeeder Mass Flow": {
+          "min": 200
+        },
+        "Specfical Heat Consumption Inst": {
+          "max": 820
+        },
+        "% TSR Kiln Inst": {
+          "min": 40
+        }
+      },
+      "stability_tags": [
+        {
+          "tag": "T Burning Zone 1",
+          "threshold_pct": 0.03
+        },
+        {
+          "tag": "T gas 1 Secondary Air",
+          "threshold_pct": 0.05
+        },
+        {
+          "tag": "O2 Outlet cyclone 3",
+          "threshold_pct": 0.2
+        },
+        {
+          "tag": "Motor 1 Current",
+          "threshold_pct": 0.08
+        },
+        {
+          "tag": "Specfical Heat Consumption Inst",
+          "threshold_pct": 0.05
+        }
+      ]
+    }
+  },
+  "kpi_tags": {
+    "BZT": {
+      "tag": "T Burning Zone 1",
+      "unit": "C",
+      "decimals": 1
+    },
+    "O2": {
+      "tag": "O2 Outlet cyclone 3",
+      "unit": "%",
+      "decimals": 2
+    },
+    "Feed": {
+      "tag": "Weighfeeder Mass Flow",
+      "unit": "t/h",
+      "decimals": 1
+    },
+    "MotorCurrent": {
+      "tag": "Motor 1 Current",
+      "unit": "A",
+      "decimals": 1
+    },
+    "TSR": {
+      "tag": "% TSR Kiln Inst",
+      "unit": "%",
+      "decimals": 1
+    },
+    "SHC": {
+      "tag": "Specfical Heat Consumption Inst",
+      "unit": "kcal/kg",
+      "decimals": 0
+    },
+    "CO": {
+      "tag": "CO Smoke Chamber",
+      "unit": "%",
+      "decimals": 3
+    },
+    "NOX": {
+      "tag": "NOX Smoke Chamber",
+      "unit": "mg/Nm3",
+      "decimals": 0
+    }
+  },
+  "scoring_settings": {
+    "comment": "Priority multipliers for candidate scoring. Priority 1 = most critical. Extend freely.",
+    "priority_multipliers": {
+      "1": 10.0,
+      "2": 5.0,
+      "3": 1.0,
+      "4": 0.5,
+      "5": 0.1
+    },
+    "age_penalty_per_day": 0.05,
+    "distance_penalty_weight": 1000.0
+  }
 }

@@ -102,6 +102,23 @@ def get_model_config_safe():
     return {}
 
 
+def get_active_strategy(conf=None):
+    """
+    Returns the currently active strategy block from model_config.json.
+    Switch strategies by changing 'active_strategy' field in the JSON.
+    Falls back to base config fields if no strategy is defined.
+    """
+    if conf is None:
+        conf = get_model_config_safe()
+    strategy_name = conf.get('active_strategy', None)
+    strategies = conf.get('strategies', {})
+    if strategy_name and strategy_name in strategies:
+        strat = strategies[strategy_name]
+        engine_logger.info(f"[STRATEGY] Active: {strategy_name} — {strat.get('description', '')}")
+        return strategy_name, strat
+    return 'DEFAULT', {}
+
+
 # ==============================================================================
 # 2. LOW-LEVEL HELPERS
 # ==============================================================================
@@ -210,24 +227,27 @@ def get_heat_input(fuel_tag, flow_value, current_state, conf):
 def check_future_stability(historical_df, candidate_ts):
     """
     Checks if the process remains stable after the candidate timestamp.
-    All stability tags defined in model_config.json 'logic_tags.stability_tags' must pass.
-    Each tag has its own threshold_pct for standard deviation / mean ratio.
+    Stability tags are read from the ACTIVE STRATEGY's stability_tags first,
+    then falls back to logic_tags.stability_tags in model_config.json.
     """
     ts_col = get_timestamp_col()
     if ts_col not in historical_df.columns: return False
     try:
-        conf = get_model_config_safe().get('logic_tags', {})
-        lookahead = conf.get('stability_lookahead', 30)
+        conf = get_model_config_safe()
+        strategy_name, strat = get_active_strategy(conf)
+        lookahead = conf.get('logic_tags', {}).get('stability_lookahead', 120)
 
-        # Read the full list of stability tags from config — no hardcoded tags
-        stability_tag_list = conf.get('stability_tags', [])
-
-        # Legacy fallback: if old single-tag config is used
+        # Strategy's own stability_tags take priority; fall back to shared logic_tags
+        stability_tag_list = strat.get('stability_tags', [])
         if not stability_tag_list:
-            legacy_tag = conf.get('primary_stability_tag')
+            stability_tag_list = conf.get('logic_tags', {}).get('stability_tags', [])
+
+        # Legacy fallback: old single-tag config
+        if not stability_tag_list:
+            legacy_tag = conf.get('logic_tags', {}).get('primary_stability_tag')
             if legacy_tag:
-                threshold_pct = conf.get('stability_threshold_pct', 0.05)
-                stability_tag_list = [{"tag": legacy_tag, "threshold_pct": threshold_pct}]
+                threshold_pct = conf.get('logic_tags', {}).get('stability_threshold_pct', 0.05)
+                stability_tag_list = [{'tag': legacy_tag, 'threshold_pct': threshold_pct}]
 
         if not stability_tag_list: return True
 
@@ -239,7 +259,6 @@ def check_future_stability(historical_df, candidate_ts):
         future_slice = historical_df.iloc[idx + 1: idx + 1 + lookahead]
         if future_slice.empty: return False
 
-        # All tags must pass their individual threshold
         for entry in stability_tag_list:
             tag_name = entry.get('tag') if isinstance(entry, dict) else entry
             threshold_pct = entry.get('threshold_pct', 0.05) if isinstance(entry, dict) else 0.05
@@ -249,7 +268,8 @@ def check_future_stability(historical_df, candidate_ts):
                 mean_val = future_slice[tag_name].mean()
                 if mean_val != 0 and (std_dev / abs(mean_val)) > threshold_pct:
                     engine_logger.debug(
-                        f"Stability FAIL on [{tag_name}]: std/mean={std_dev/abs(mean_val):.3f} > {threshold_pct}")
+                        f"Stability FAIL [{strategy_name}] on [{tag_name}]: "
+                        f"cv={std_dev/abs(mean_val):.3f} > {threshold_pct}")
                     return False
 
         return True
@@ -434,15 +454,20 @@ def _calculate_core_score(row, current_state, controls_cfg, weights=None, active
                     hist_val = hist_val_raw * hist_cv
 
             if curr_val != 0:
-                weight = {1: 10.0, 2: 5.0}.get(prio, 1.0) if is_advanced else 1.0
+                scoring_cfg = conf.get('scoring_settings', {})
+                multipliers = scoring_cfg.get('priority_multipliers', {'1': 10.0, '2': 5.0})
+                weight = float(multipliers.get(str(prio), 1.0)) if is_advanced else 1.0
                 dist_sum += ((abs(curr_val - hist_val) / curr_val) ** 2) * weight
 
-        score -= (dist_sum * penalty_weight)
+        scoring_cfg = conf.get('scoring_settings', {})
+        p_weight = scoring_cfg.get('distance_penalty_weight', penalty_weight)
+        score -= (dist_sum * p_weight)
 
     if ts_col in row and pd.notnull(row[ts_col]):
         try:
             age_days = (now - row[ts_col]).total_seconds() / 86400.0
-            score -= (age_days * 0.05)
+            age_penalty = conf.get('scoring_settings', {}).get('age_penalty_per_day', 0.05)
+            score -= (age_days * age_penalty)
         except:
             pass
     return score
@@ -452,15 +477,16 @@ def _calculate_core_score(row, current_state, controls_cfg, weights=None, active
 # 5. SEARCH & OPTIMIZATION
 # ==============================================================================
 def apply_golden_filter(hist_df):
-    """Applies the golden_filter_tag (existing) plus the golden_prefilter block.
-    golden_prefilter excludes startup, shutdown, and upset periods before search.
-    All filter limits are read from model_config.json — nothing hardcoded.
+    """Applies golden_filter_tag plus the golden_prefilter block.
+    Uses the ACTIVE STRATEGY's golden_prefilter if defined, otherwise falls back
+    to the top-level golden_prefilter in model_config.json.
     """
     if hist_df.empty: return hist_df
     conf = get_model_config_safe()
     logic = conf.get('logic_tags', {})
+    strategy_name, strat = get_active_strategy(conf)
 
-    # Existing golden_filter_tag (single-tag upper limit)
+    # Existing golden_filter_tag (single-tag upper limit from logic_tags)
     filter_tag = logic.get('golden_filter_tag')
     filter_limit = logic.get('golden_filter_max', 850.0)
     if filter_tag and filter_tag in hist_df.columns:
@@ -468,8 +494,11 @@ def apply_golden_filter(hist_df):
         hist_df = hist_df[hist_df[filter_tag] <= filter_limit]
         engine_logger.info(f"[PREFILTER] golden_filter_tag '{filter_tag}': removed {before - len(hist_df)} rows.")
 
-    # New golden_prefilter block — multi-tag range filter
-    prefilter = conf.get('golden_prefilter', {})
+    # Strategy prefilter takes priority over top-level golden_prefilter
+    prefilter = strat.get('golden_prefilter', conf.get('golden_prefilter', {}))
+    if prefilter:
+        engine_logger.info(f"[PREFILTER] Applying strategy '{strategy_name}' prefilter ({len(prefilter)} tags)")
+
     for tag, limits in prefilter.items():
         if tag == 'comment': continue
         if tag not in hist_df.columns: continue
@@ -522,57 +551,57 @@ def find_best_fingerprint_advanced(current_real_df_window, historical_df, fronte
     active_constraints = {}
     active_tags = []
 
-    for tag, strategy in frontend_strategy.items():
-        if tag not in valid_history.columns: continue
-        try:
-            prev_count = len(valid_history)
+    # --- TWO-STAGE SEARCH: Standard (25% tol) -> Steering (100% tol) ---
+    search_phases = [
+        {'name': 'Standard', 'tol': 0.25},
+        {'name': 'Steering (Relaxed)', 'tol': 1.0}
+    ]
 
-            abs_min = float(strategy.get('min', -9e9))
-            abs_max = float(strategy.get('max', 9e9))
+    working_history = valid_history.copy()
+    final_matches = pd.DataFrame()
 
-            tol_pct = float(strategy.get('tolerance_pct', 25.0)) / 100.0
-            cur_val = float(current_state.get(tag, 0))
+    for phase in search_phases:
+        engine_logger.info(f"[SEARCH] Starting Phase: {phase['name']} (Tolerance: {phase['tol'] * 100:.0f}%)")
+        phase_history = working_history.copy()
+        tol_pct = phase['tol']
 
-            if cur_val != 0:
-                tol_min = cur_val * (1 - tol_pct)
-                tol_max = cur_val * (1 + tol_pct)
-                eff_min = max(abs_min, tol_min)
-                eff_max = min(abs_max, tol_max)
-            else:
-                eff_min, eff_max = abs_min, abs_max
-
-            if eff_min > eff_max:
-                engine_logger.warning(f"Impossible range for {tag}: {eff_min} to {eff_max}. Adjusting limits.")
-                eff_min, eff_max = min(eff_min, eff_max), max(eff_min, eff_max)
-
-            valid_history = valid_history[valid_history[tag].between(eff_min, eff_max)]
-
-            dropped = prev_count - len(valid_history)
-            if dropped > 0:
-                engine_logger.info(
-                    f"Filter {tag} [{eff_min:.1f}-{eff_max:.1f}]: Removed {dropped} rows. Remaining: {len(valid_history)}")
-
-            active_constraints[tag] = strategy
-            active_tags.append(tag)
-
-            if valid_history.empty:
-                engine_logger.warning(f"Filter {tag} dropped ALL rows. Aborting further filtering.")
-                break
-        except:
-            continue
-
-    if valid_history.empty:
-        engine_logger.warning("[SEARCH] Strict filters returned 0 matches. Reverting to tail(500) fallback.")
-        valid_history = historical_df.tail(500).copy()
         for tag, strategy in frontend_strategy.items():
-            if tag in valid_history.columns:
-                try:
-                    min_l = float(strategy.get('min', strategy.get('Min', -9e9)))
-                    max_l = float(strategy.get('max', strategy.get('Max', 9e9)))
-                    valid_history = valid_history[valid_history[tag].between(min_l, max_l)]
-                except:
-                    continue
+            if tag not in phase_history.columns: continue
+            try:
+                abs_min = float(strategy.get('min', -9e9))
+                abs_max = float(strategy.get('max', 9e9))
+                cur_val = float(current_state.get(tag, 0))
 
+                if cur_val != 0:
+                    tol_min = cur_val * (1 - tol_pct)
+                    tol_max = cur_val * (1 + tol_pct)
+                    eff_min = max(abs_min, tol_min)
+                    eff_max = min(abs_max, tol_max)
+                else:
+                    eff_min, eff_max = abs_min, abs_max
+
+                phase_history = phase_history[phase_history[tag].between(eff_min, eff_max)]
+                if phase_history.empty: break
+            except:
+                continue
+
+        if not phase_history.empty:
+            engine_logger.info(f"[SEARCH] Phase '{phase['name']}' found {len(phase_history)} matches.")
+            final_matches = phase_history
+            # Also capture the constraints used for scoring
+            for tag, strategy in frontend_strategy.items():
+                active_constraints[tag] = strategy.copy()
+                active_constraints[tag]['eff_tol'] = tol_pct
+            break
+        else:
+            engine_logger.warning(f"[SEARCH] Phase '{phase['name']}' yielded zero matches.")
+
+    if final_matches.empty:
+        engine_logger.error("[SEARCH] CRITICAL: No matches even in Steering mode. Using Golden dataset as fallback.")
+        final_matches = working_history  # Last resort: absolute closest in entire Golden dataset
+
+    valid_history = final_matches
+    active_tags = [t for t in frontend_strategy.keys() if t in valid_history.columns]
     inv_cov = get_mahalanobis_matrix(valid_history, active_tags)
 
     if ts_col in valid_history.columns:
@@ -617,29 +646,29 @@ def get_scan_interval():
 def calculate_kpis(current_state):
     """
     Calculates Key Performance Indicators for the UI.
-    Tags are read from model_config.json — no hardcoded tag names.
-    Now includes primary optimisation target (motor current) alongside BZT and O2.
+    Generic implementation: iterates over 'kpi_tags' in model_config.json.
     """
-    defaults = {"BZT": 0.0, "Feed": 0.0, "O2": 0.0, "MotorCurrent": 0.0}
     try:
         conf = get_model_config_safe()
-        matrix_tags = conf.get('operational_matrix_settings', {}).get('tags', {})
-        matrix_acts = conf.get('operational_matrix_settings', {}).get('actuators', {})
-        opt_target = conf.get('optimisation_target', {})
+        strategy_name, _ = get_active_strategy(conf)
+        kpi_definitions = conf.get('kpi_tags', {})
 
-        bzt_tag = matrix_tags.get('bzt')
-        o2_tag = matrix_tags.get('o2_inlet')
-        feed_tag = matrix_acts.get('feed')
-        motor_tag = opt_target.get('primary_tag')
-
-        return {
-            "BZT":          round(float(current_state.get(bzt_tag, 0)), 1) if bzt_tag else 0,
-            "Feed":         round(float(current_state.get(feed_tag, 0)), 1) if feed_tag else 0,
-            "O2":           round(float(current_state.get(o2_tag, 0)), 2) if o2_tag else 0,
-            "MotorCurrent": round(float(current_state.get(motor_tag, 0)), 1) if motor_tag else 0
-        }
-    except:
-        return defaults
+        results = {'ActiveStrategy': strategy_name}
+        for kpi_name, defn in kpi_definitions.items():
+            tag = defn.get('tag')
+            dec = defn.get('decimals', 1)
+            if tag:
+                val = current_state.get(tag, 0)
+                try:
+                    results[kpi_name] = round(float(val), dec)
+                except (ValueError, TypeError):
+                    results[kpi_name] = 0.0
+            else:
+                results[kpi_name] = 0.0
+        return results
+    except Exception as e:
+        engine_logger.error(f"KPI calculation error: {e}")
+        return {'ActiveStrategy': 'ERROR', 'BZT': 0, 'O2': 0, 'Feed': 0, 'MotorCurrent': 0}
 
 
 def check_disturbance_rules(current_state):
@@ -738,10 +767,13 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
 
         # Read nudge settings from config — no hardcoded step values
         full_conf = get_model_config_safe()
+        strategy_name, strat = get_active_strategy(full_conf)
         nudge_cfg = full_conf.get('nudge_settings', {})
         step_fraction = nudge_cfg.get('step_fraction', 0.15)
         min_step_fraction = nudge_cfg.get('min_step_fraction', 0.005)
         allow_full_jump = nudge_cfg.get('allow_full_jump', False)
+
+        engine_logger.info(f"[CYCLE] Mode={mode}  Strategy={strategy_name}")
 
         current_state = map_tags_to_friendly_names(raw_state, controls_cfg, indicators_cfg)
 
@@ -750,7 +782,7 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
         dynamic_weights = calculate_dynamic_weights(current_state, base_weights)
 
         target_vals, target_disp, reason = {}, "Searching...", "Optimized"
-        future_data, top_matches = [], []
+        future_data, top_matches, match_meta = [], [], {}
 
         # =========================================================
         # DECISION BLOCK: MANUAL vs AUTO (TIMED)
@@ -783,39 +815,52 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
                     ts_col = get_timestamp_col()
 
                     # Build rich match metadata — operators see WHY this timestamp was selected
-                    match_meta = {}
-                    opt_conf = full_conf.get('optimisation_target', {})
+                    match_meta = {'strategy': strategy_name}
+                    opt_conf = strat.get('optimisation_target', full_conf.get('optimisation_target', {}))
                     co_targets = opt_conf.get('co_targets', [])
 
-                    # Always include primary target (motor current)
+                    # Primary KPI at matched timestamp
                     primary_tag = opt_conf.get('primary_tag')
                     if primary_tag and primary_tag in best:
-                        match_meta['motor_current_at_match'] = round(float(best.get(primary_tag, 0)), 1)
+                        match_meta['primary_tag'] = primary_tag
+                        match_meta['primary_value_at_match'] = round(float(best.get(primary_tag, 0)), 2)
 
-                    # Include each co-target value at the matched timestamp
+                    # Motor current always included (even if not primary target)
+                    motor_tag = full_conf.get('optimisation_target', {}).get('primary_tag', 'Motor 1 Current')
+                    if motor_tag in best:
+                        match_meta['motor_current_at_match'] = round(float(best.get(motor_tag, 0)), 1)
+
+                    # TSR and SHC always included
+                    for kpi_tag, kpi_key in [('% TSR Kiln Inst', 'tsr_at_match'),
+                                             ('Specfical Heat Consumption Inst', 'shc_at_match')]:
+                        if kpi_tag in best:
+                            match_meta[kpi_key] = round(float(best.get(kpi_tag, 0)), 2)
+
+                    # Co-target values
                     for ct in co_targets:
                         ctag = ct.get('tag')
                         if ctag and ctag in best:
                             key = ctag.replace(' ', '_').lower()
                             match_meta[key] = round(float(best.get(ctag, 0)), 1)
 
-                    # Include fuel rates at matched timestamp
+                    # Fuel rates
                     for fuel_tag in full_conf.get('fuel_calorific_pairing', {}).keys():
                         if fuel_tag in best:
                             key = 'matched_' + fuel_tag.replace(' ', '_').lower()[:30]
                             match_meta[key] = round(float(best.get(fuel_tag, 0)), 3)
 
                     CACHED_AUTO_RESULT = {
-                        "target_vals": best.to_dict(),
-                        "target_disp": str(best.get(ts_col)),
-                        "top_matches": [str(r.get(ts_col)) for r in best_rows],
-                        "match_meta": match_meta
+                        'target_vals': best.to_dict(),
+                        'target_disp': str(best.get(ts_col)),
+                        'top_matches': [str(r.get(ts_col)) for r in best_rows],
+                        'match_meta':  match_meta
                     }
                     LAST_AUTO_SCAN_TIME = now
                     engine_logger.info(
-                        f"[AUTO] New Target: {CACHED_AUTO_RESULT['target_disp']} | "
-                        f"Motor: {match_meta.get('motor_current_at_match', '?')}A | "
-                        f"Meta: {match_meta}")
+                        f"[AUTO] Strategy={strategy_name} Target={CACHED_AUTO_RESULT['target_disp']} "
+                        f"| Primary ({primary_tag})={match_meta.get('primary_value_at_match','?')} "
+                        f"| TSR={match_meta.get('tsr_at_match','?')}% "
+                        f"| SHC={match_meta.get('shc_at_match','?')} kcal/kg")
                 else:
                     engine_logger.warning("[AUTO] No matches found. Keeping previous target.")
                     LAST_AUTO_SCAN_TIME = now
@@ -961,7 +1006,9 @@ def rank_and_select_recommendations(historical_df, candidates, weights=None, cur
                     curr_val = get_heat_input(tag, curr_val, current_state, conf)
 
                 if curr_val != 0:
-                    weight = {1: 10.0, 2: 5.0}.get(prio, 1.0)
+                    scoring_cfg = conf.get('scoring_settings', {})
+                    multipliers = scoring_cfg.get('priority_multipliers', {'1': 10.0, '2': 5.0})
+                    weight = float(multipliers.get(str(prio), 1.0))
 
                     hist_vals = df[tag].copy()
                     ratios = np.abs(curr_val / hist_vals.replace(0, np.nan))
@@ -974,12 +1021,14 @@ def rank_and_select_recommendations(historical_df, candidates, weights=None, cur
             except Exception:
                 continue
 
-        df['score'] -= (dist_sum * 1000.0)
+        p_weight = conf.get('scoring_settings', {}).get('distance_penalty_weight', 1000.0)
+        df['score'] -= (dist_sum * p_weight)
 
     if ts_col in df.columns:
         now = pd.Timestamp.now()
         age_days = (now - df[ts_col]).dt.total_seconds() / 86400.0
-        df['score'] -= (age_days.fillna(0) * 0.05)
+        age_penalty = conf.get('scoring_settings', {}).get('age_penalty_per_day', 0.05)
+        df['score'] -= (age_days.fillna(0) * age_penalty)
 
     df = df.sort_values(by=['score'], ascending=False)
     stable_candidates = []
