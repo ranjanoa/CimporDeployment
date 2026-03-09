@@ -31,7 +31,6 @@ def setup_logging():
     if not _logger.handlers:
         if not os.path.exists("logs"):
             os.makedirs("logs", exist_ok=True)
-        # Use utf-8 for file handler to support special chars if needed in future
         fh = logging.FileHandler("logs/fingerprint_debug.log", encoding='utf-8')
         fh.setLevel(logging.INFO)
         ch = logging.StreamHandler()
@@ -50,7 +49,6 @@ engine_logger = setup_logging()
 process_model = None
 try:
     import process_model
-
     HAS_PROCESS_MODEL = True
 except ImportError:
     HAS_PROCESS_MODEL = False
@@ -110,36 +108,30 @@ def get_model_config_safe():
 def robust_read_csv(file_path):
     parquet_path = file_path.replace('.csv', '.parquet')
     try:
-        # Check if Parquet cache exists
         if os.path.exists(parquet_path):
-            # Verify if the CSV is actually newer than our cached Parquet
             csv_mtime = os.path.getmtime(file_path) if os.path.exists(file_path) else 0
             parquet_mtime = os.path.getmtime(parquet_path)
-            
             if csv_mtime > parquet_mtime:
                 engine_logger.info("Detected newly updated CSV file! Recompiling Parquet cache...")
             else:
-                # Load lightning fast Parquet
                 df = pd.read_parquet(parquet_path)
                 engine_logger.info(f"Loaded Parquet file instantly with {len(df)} rows.")
                 return df
-                
+
         if not os.path.exists(file_path):
             engine_logger.warning(f"Data file not found at: {file_path} or {parquet_path}")
             return pd.DataFrame()
-            
-        # Fallback to slow CSV and rebuild cache
+
         engine_logger.info("Reading raw CSV. This will take a moment before optimizing...")
         df = pd.read_csv(file_path)
         df.columns = [str(c).strip() for c in df.columns]
-        
-        # Save as Parquet for future rapid loads
+
         try:
             df.to_parquet(parquet_path, engine='pyarrow')
             engine_logger.info(f"Optimized history and saved Parquet cache to {parquet_path}")
         except Exception as pe:
             engine_logger.warning(f"Could not save Parquet file: {pe} (Install pyarrow to enable caching).")
-            
+
         return df
     except Exception as e:
         engine_logger.error(f"Data Read Error: {e}")
@@ -147,9 +139,7 @@ def robust_read_csv(file_path):
 
 
 def map_csv_headers(hist_df, controls_cfg, indicators_cfg):
-    """
-    Restored mapping logic using 'tag_name' from JSON.
-    """
+    """Restored mapping logic using 'tag_name' from JSON."""
     if hist_df.empty: return hist_df
     df = hist_df.copy()
     rename_map = {}
@@ -201,19 +191,45 @@ def pre_calculate_slopes(df, controls_cfg):
     return df_slopes
 
 
+def get_heat_input(fuel_tag, flow_value, current_state, conf):
+    """
+    Computes specific heat input (GJ/h) = flow (t/h) * calorific_value (GJ/t).
+    Pairing is defined in model_config.json under 'fuel_calorific_pairing'.
+    Falls back to raw flow value if CV tag not available.
+    """
+    pairing = conf.get('fuel_calorific_pairing', {})
+    cv_tag = pairing.get(fuel_tag)
+    if cv_tag:
+        cv_value = float(current_state.get(cv_tag, 0))
+        if cv_value > 0:
+            heat_input = flow_value * cv_value
+            return heat_input
+    return flow_value  # Fallback: use raw flow if CV not available
+
+
 def check_future_stability(historical_df, candidate_ts):
+    """
+    Checks if the process remains stable after the candidate timestamp.
+    All stability tags defined in model_config.json 'logic_tags.stability_tags' must pass.
+    Each tag has its own threshold_pct for standard deviation / mean ratio.
+    """
     ts_col = get_timestamp_col()
     if ts_col not in historical_df.columns: return False
     try:
         conf = get_model_config_safe().get('logic_tags', {})
         lookahead = conf.get('stability_lookahead', 30)
-        threshold_pct = conf.get('stability_threshold_pct', 0.05)
 
-        stability_vars = []
-        if 'primary_stability_tag' in conf: stability_vars.append(conf['primary_stability_tag'])
-        if 'main_optimization_tag' in conf: stability_vars.append(conf['main_optimization_tag'])
+        # Read the full list of stability tags from config — no hardcoded tags
+        stability_tag_list = conf.get('stability_tags', [])
 
-        if not stability_vars: return True
+        # Legacy fallback: if old single-tag config is used
+        if not stability_tag_list:
+            legacy_tag = conf.get('primary_stability_tag')
+            if legacy_tag:
+                threshold_pct = conf.get('stability_threshold_pct', 0.05)
+                stability_tag_list = [{"tag": legacy_tag, "threshold_pct": threshold_pct}]
+
+        if not stability_tag_list: return True
 
         match_idx = historical_df.index[historical_df[ts_col] == candidate_ts].tolist()
         if not match_idx: return False
@@ -223,12 +239,19 @@ def check_future_stability(historical_df, candidate_ts):
         future_slice = historical_df.iloc[idx + 1: idx + 1 + lookahead]
         if future_slice.empty: return False
 
-        for tag_name in stability_vars:
+        # All tags must pass their individual threshold
+        for entry in stability_tag_list:
+            tag_name = entry.get('tag') if isinstance(entry, dict) else entry
+            threshold_pct = entry.get('threshold_pct', 0.05) if isinstance(entry, dict) else 0.05
+
             if tag_name in future_slice.columns:
                 std_dev = future_slice[tag_name].std()
                 mean_val = future_slice[tag_name].mean()
-                if mean_val != 0 and (std_dev / mean_val) > threshold_pct:
+                if mean_val != 0 and (std_dev / abs(mean_val)) > threshold_pct:
+                    engine_logger.debug(
+                        f"Stability FAIL on [{tag_name}]: std/mean={std_dev/abs(mean_val):.3f} > {threshold_pct}")
                     return False
+
         return True
     except Exception:
         return True
@@ -261,6 +284,11 @@ def get_cached_dataframe(controls_cfg, indicators_cfg):
 # 3. DYNAMIC WEIGHT BIAS (OPERATIONAL MATRIX)
 # ==============================================================================
 def calculate_dynamic_weights(current_state, base_weights):
+    """
+    All rules, thresholds, tags, and weights are read from model_config.json.
+    Nothing is hardcoded. Rules can be enabled/disabled via 'matrix_rules' in config.
+    Hot kiln: fuel-first priority enforced by 'hot_kiln_rule.priority_action'.
+    """
     if not HAS_PROCESS_MODEL or not process_model: return base_weights
 
     new_weights = base_weights.copy()
@@ -273,37 +301,60 @@ def calculate_dynamic_weights(current_state, base_weights):
         lim = matrix.get('limits', {})
         bias = matrix.get('matrix_bias', {})
         actuators = matrix.get('actuators', {})
+        rules_enabled = matrix.get('matrix_rules', {})
+        hot_kiln_rule = matrix.get('hot_kiln_rule', {})
 
         bzt = float(current_state.get(tags.get('bzt'), 0))
         o2 = float(current_state.get(tags.get('o2_inlet'), 0))
         c4_temp = float(current_state.get(tags.get('c4_temp'), 0))
 
-        # --- RULE 1: HOT KILN ---
-        if bzt > lim.get('bzt_hot', 1400):
-            fuel_tag = actuators.get('fuel_main')
-            feed_tag = actuators.get('feed')
+        fuel_tag = actuators.get('fuel_main')
+        feed_tag = actuators.get('feed')
+        fan_tag = actuators.get('id_fan')
+        calc_tag = actuators.get('fuel_calciner')
 
-            if fuel_tag: new_weights[fuel_tag] = bias.get('hot_kiln_fuel_weight', -15.0)
-            if feed_tag: new_weights[feed_tag] = bias.get('hot_kiln_feed_weight', 10.0)
-            engine_logger.info(f"KILN HOT ({bzt:.0f}): Adjusted weights for Low Fuel / High Feed")
+        # --- RULE 1: HOT KILN ---
+        if rules_enabled.get('hot_kiln_enabled', True):
+            if bzt > lim.get('bzt_hot', 9999):
+                priority = hot_kiln_rule.get('priority_action', 'fuel_first')
+                fuel_w = hot_kiln_rule.get('fuel_weight', bias.get('hot_kiln_fuel_weight', -15.0))
+                feed_w = hot_kiln_rule.get('feed_weight', bias.get('hot_kiln_feed_weight', 10.0))
+                fuel_first_only = hot_kiln_rule.get('apply_feed_only_if_fuel_already_reduced', True)
+
+                if fuel_tag:
+                    new_weights[fuel_tag] = fuel_w
+
+                # Feed increase is secondary — only applied if fuel is already trending down
+                # and priority_action allows it
+                if feed_tag and priority == 'fuel_first' and not fuel_first_only:
+                    new_weights[feed_tag] = feed_w
+                elif feed_tag and priority != 'fuel_first':
+                    new_weights[feed_tag] = feed_w
+
+                engine_logger.info(
+                    f"KILN HOT ({bzt:.0f}°C): Fuel weight={fuel_w} applied first. "
+                    f"Feed weight applied: {not fuel_first_only}")
 
         # --- RULE 2: COLD KILN ---
-        elif bzt < lim.get('bzt_cold', 1250) and bzt > 500:
-            fuel_tag = actuators.get('fuel_main')
-            if fuel_tag: new_weights[fuel_tag] = bias.get('cold_kiln_fuel_weight', 15.0)
-            engine_logger.info(f"KILN COLD ({bzt:.0f}): Adjusted weights for High Fuel")
+        if rules_enabled.get('cold_kiln_enabled', True):
+            if lim.get('bzt_cold', 0) > bzt > 500:
+                if fuel_tag:
+                    new_weights[fuel_tag] = bias.get('cold_kiln_fuel_weight', 15.0)
+                engine_logger.info(f"KILN COLD ({bzt:.0f}°C): Adjusted weights for High Fuel")
 
-        # --- RULE 3: LOW O2 ---
-        if o2 < lim.get('o2_min', 2.5) and o2 > 0.1:
-            fan_tag = actuators.get('id_fan')
-            if fan_tag: new_weights[fan_tag] = bias.get('low_o2_fan_weight', 12.0)
-            engine_logger.info(f"LOW O2 ({o2:.1f}): Adjusted weights for High Draft")
+        # --- RULE 3: LOW O2 → ID FAN (disabled by default per operator instruction) ---
+        if rules_enabled.get('low_o2_id_fan_enabled', False):
+            if o2 < lim.get('o2_min', 9999) and o2 > 0.1:
+                if fan_tag:
+                    new_weights[fan_tag] = bias.get('low_o2_fan_weight', 0)
+                engine_logger.info(f"LOW O2 ({o2:.1f}%): Adjusted weights for High Draft")
 
         # --- RULE 4: LOW C4 TEMP ---
-        if c4_temp < lim.get('c4_temp_min', 860) and c4_temp > 400:
-            calc_tag = actuators.get('fuel_calciner')
-            if calc_tag: new_weights[calc_tag] = bias.get('low_c4_calciner_weight', 8.0)
-            engine_logger.info(f"LOW C4 TEMP ({c4_temp:.0f}): Adjusted weights for High Calciner Fuel")
+        if rules_enabled.get('low_c4_temp_enabled', True):
+            if c4_temp < lim.get('c4_temp_min', 9999) and c4_temp > 400:
+                if calc_tag:
+                    new_weights[calc_tag] = bias.get('low_c4_calciner_weight', 8.0)
+                engine_logger.info(f"LOW C4 TEMP ({c4_temp:.0f}°C): Adjusted weights for High Calciner Fuel")
 
     except Exception as e:
         engine_logger.error(f"Weight Bias Error: {e}")
@@ -318,17 +369,28 @@ def calculate_dynamic_weights(current_state, base_weights):
 def calculate_match_percentage(current_state, row, controls_cfg):
     """Calculates a numerical 0-100% similarity score."""
     if not isinstance(current_state, dict) or not controls_cfg: return 0.0
+    conf = get_model_config_safe()
+    fuel_pairing = conf.get('fuel_calorific_pairing', {})
+
     dist_sum, count = 0.0, 0
     for tag, props in controls_cfg.items():
         if tag in row:
             curr_val = float(current_state.get(tag, 0))
             hist_val = align_magnitude(row.get(tag, 0), curr_val)
+
+            # Use heat input (flow × CV) for fuel tags if pairing is available
+            if tag in fuel_pairing:
+                curr_val = get_heat_input(tag, curr_val, current_state, conf)
+                hist_val_raw = float(row.get(tag, 0))
+                hist_cv_tag = fuel_pairing[tag]
+                hist_cv = float(row.get(hist_cv_tag, 0))
+                if hist_cv > 0:
+                    hist_val = hist_val_raw * hist_cv
+
             if curr_val != 0:
-                # Use sqrt of normalized squared error
                 dist_sum += ((abs(curr_val - hist_val) / curr_val) ** 2)
                 count += 1
     if count == 0: return 0.0
-    # Map distance sum to 0-100 scale (1.0 distance = 0% match)
     return max(0, min(100, 100 * (1 - np.sqrt(dist_sum / count))))
 
 
@@ -337,13 +399,13 @@ def _calculate_core_score(row, current_state, controls_cfg, weights=None, active
     score = 0.0
     now = pd.Timestamp.now()
     ts_col = get_timestamp_col()
+    conf = get_model_config_safe()
 
     if weights:
         for tag, w in weights.items(): score += (row.get(tag, 0) * w)
 
     if isinstance(current_state, dict):
         dist_sum = 0.0
-        fuel_bonus = 1.0
 
         for tag, props in active_constraints.items() if active_constraints else controls_cfg.items():
             if is_advanced:
@@ -362,11 +424,20 @@ def _calculate_core_score(row, current_state, controls_cfg, weights=None, active
             curr_val = float(current_state.get(tag, 0))
             hist_val = align_magnitude(row.get(tag, 0), curr_val)
 
+            # Use specific heat input for fuel tags
+            if tag in conf.get('fuel_calorific_pairing', {}):
+                curr_val = get_heat_input(tag, curr_val, current_state, conf)
+                hist_val_raw = float(row.get(tag, 0))
+                cv_tag = conf['fuel_calorific_pairing'][tag]
+                hist_cv = float(row.get(cv_tag, 0))
+                if hist_cv > 0:
+                    hist_val = hist_val_raw * hist_cv
+
             if curr_val != 0:
                 weight = {1: 10.0, 2: 5.0}.get(prio, 1.0) if is_advanced else 1.0
                 dist_sum += ((abs(curr_val - hist_val) / curr_val) ** 2) * weight
 
-        score -= (dist_sum * penalty_weight * fuel_bonus)
+        score -= (dist_sum * penalty_weight)
 
     if ts_col in row and pd.notnull(row[ts_col]):
         try:
@@ -412,7 +483,6 @@ def find_best_fingerprint_advanced(current_real_df_window, historical_df, fronte
                                    weights=None):
     if historical_df.empty or not frontend_strategy: return []
 
-    # LOG INITIAL DATASET SIZE
     initial_count = len(historical_df)
     engine_logger.info(f"[SEARCH] Starting optimization on total dataset of {initial_count} rows.")
 
@@ -430,19 +500,15 @@ def find_best_fingerprint_advanced(current_real_df_window, historical_df, fronte
         try:
             prev_count = len(valid_history)
 
-            # 1. Calculate the 'Effective' Range to display in logs like manual mode
-            # Absolute Limits
             abs_min = float(strategy.get('min', -9e9))
             abs_max = float(strategy.get('max', 9e9))
 
-            # Tolerance Limits
             tol_pct = float(strategy.get('tolerance_pct', 25.0)) / 100.0
             cur_val = float(current_state.get(tag, 0))
 
             if cur_val != 0:
                 tol_min = cur_val * (1 - tol_pct)
                 tol_max = cur_val * (1 + tol_pct)
-                # The effective range is the intersection (stricter of the two)
                 eff_min = max(abs_min, tol_min)
                 eff_max = min(abs_max, tol_max)
             else:
@@ -452,10 +518,8 @@ def find_best_fingerprint_advanced(current_real_df_window, historical_df, fronte
                 engine_logger.warning(f"Impossible range for {tag}: {eff_min} to {eff_max}. Adjusting limits.")
                 eff_min, eff_max = min(eff_min, eff_max), max(eff_min, eff_max)
 
-            # 2. Apply Filters
             valid_history = valid_history[valid_history[tag].between(eff_min, eff_max)]
 
-            # 3. Log similar to Manual Scan: Filter Name [Min-Max]: Removed X rows.
             dropped = prev_count - len(valid_history)
             if dropped > 0:
                 engine_logger.info(
@@ -518,36 +582,52 @@ def find_best_fingerprint_advanced(current_real_df_window, historical_df, fronte
 LAST_AUTO_SCAN_TIME = None
 CACHED_AUTO_RESULT = None
 
+
 def get_scan_interval():
     return getattr(config, 'SCAN_INTERVAL_SECONDS', 300)
 
 
 def calculate_kpis(current_state):
-    """Calculates Key Performance Indicators (BZT, Feed, O2) for the UI."""
-    defaults = {"BZT": 0.0, "Feed": 0.0, "O2": 0.0}
+    """
+    Calculates Key Performance Indicators for the UI.
+    Tags are read from model_config.json — no hardcoded tag names.
+    Now includes primary optimisation target (motor current) alongside BZT and O2.
+    """
+    defaults = {"BZT": 0.0, "Feed": 0.0, "O2": 0.0, "MotorCurrent": 0.0}
     try:
         conf = get_model_config_safe()
         matrix_tags = conf.get('operational_matrix_settings', {}).get('tags', {})
         matrix_acts = conf.get('operational_matrix_settings', {}).get('actuators', {})
+        opt_target = conf.get('optimisation_target', {})
 
         bzt_tag = matrix_tags.get('bzt')
         o2_tag = matrix_tags.get('o2_inlet')
         feed_tag = matrix_acts.get('feed')
+        motor_tag = opt_target.get('primary_tag')
 
         return {
-            "BZT": round(float(current_state.get(bzt_tag, 0)), 1) if bzt_tag else 0,
-            "Feed": round(float(current_state.get(feed_tag, 0)), 1) if feed_tag else 0,
-            "O2": round(float(current_state.get(o2_tag, 0)), 2) if o2_tag else 0
+            "BZT":          round(float(current_state.get(bzt_tag, 0)), 1) if bzt_tag else 0,
+            "Feed":         round(float(current_state.get(feed_tag, 0)), 1) if feed_tag else 0,
+            "O2":           round(float(current_state.get(o2_tag, 0)), 2) if o2_tag else 0,
+            "MotorCurrent": round(float(current_state.get(motor_tag, 0)), 1) if motor_tag else 0
         }
     except:
         return defaults
 
 
 def check_disturbance_rules(current_state):
-    """Checks for critical safety rules that override the fingerprint engine."""
+    """
+    Checks safety rules from model_config.json 'safety_rules'.
+    All thresholds and actions are config-driven.
+    Enforces gradual ramp via 'ramp_rate' — no step changes ever produced.
+    """
     if not HAS_PROCESS_MODEL or not process_model: return None
     try:
         conf = process_model.load_model_config()
+        # Also read nudge_settings for a default rate cap
+        nudge = conf.get('nudge_settings', {})
+        default_ramp_rate = nudge.get('min_step_fraction', 0.005)
+
         for rule in conf.get('safety_rules', []):
             live = float(current_state.get(rule['condition_var'], 9999))
             op = rule.get('operator')
@@ -555,30 +635,53 @@ def check_disturbance_rules(current_state):
 
             if (op == '>' and live > thresh) or (op == '<' and live < thresh):
                 tgt = rule['action_var']
-                val = rule['action_value']
+                action_type = rule.get('action_type', 'offset')
+                raw_value = rule['action_value']
 
+                # Enforce ramp_rate — the action_value per cycle is capped
+                ramp_rate = rule.get('ramp_rate', None)
                 curr = float(current_state.get(tgt, 0))
-                new_v = curr + val if rule.get('action_type') == 'offset' else val
 
-                engine_logger.warning(f"CRITICAL SAFETY: {rule['name']} triggered on {tgt}")
+                if action_type == 'offset':
+                    # Cap the offset to ramp_rate to ensure gradual change
+                    if ramp_rate is not None:
+                        capped_value = max(-abs(ramp_rate), min(abs(ramp_rate), raw_value))
+                    else:
+                        # Fallback: cap to default_ramp_rate fraction of current value
+                        capped_value = raw_value * default_ramp_rate if curr != 0 else raw_value
+                    new_v = curr + capped_value
+                elif action_type == 'min_clamp':
+                    # Convert legacy min_clamp to a gradual offset toward the clamp value
+                    target_clamped = float(raw_value)
+                    diff = target_clamped - curr
+                    if ramp_rate is not None:
+                        step = max(-abs(ramp_rate), min(abs(ramp_rate), diff))
+                    else:
+                        step = diff * default_ramp_rate
+                    new_v = curr + step
+                else:
+                    new_v = curr + raw_value
+
+                engine_logger.warning(
+                    f"SAFETY RULE '{rule['name']}': {rule['condition_var']}={live:.1f} {op} {thresh}. "
+                    f"Nudging {tgt}: {curr:.3f} → {new_v:.3f} (ramp_rate={ramp_rate})")
                 return {
                     "match_score": "SAFETY-CLAMP",
                     "timestamp": str(pd.Timestamp.now()),
-                    "actions": [{"var_name": tgt, "fingerprint_set_point": new_v, "reason": f"SAFETY: {rule['name']}"}]
+                    "actions": [{"var_name": tgt, "fingerprint_set_point": new_v,
+                                 "reason": f"SAFETY: {rule['name']} (gradual)"}]
                 }
-    except:
-        pass
+    except Exception as e:
+        engine_logger.error(f"Disturbance Rule Error: {e}")
     return None
 
 
 def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
     """
-    Main Loop.
-    Updates:
-    1. Manual Mode: Skips search completely.
-    2. Auto Mode: Runs search only every 5 minutes (300s).
+    Main Loop. All nudge step parameters are read from model_config.json 'nudge_settings'.
+    No hardcoded step fractions or full-jump fallbacks.
     """
-    global LAST_AUTO_SCAN_TIME, CACHED_AUTO_RESULT  # Use globals to persist between cycles
+    global LAST_AUTO_SCAN_TIME, CACHED_AUTO_RESULT
 
     if current_real_df_window.empty: return None
     try:
@@ -606,6 +709,13 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
             base_weights = {}
             frontend_strategy = frontend_strategy or {}
 
+        # Read nudge settings from config — no hardcoded step values
+        full_conf = get_model_config_safe()
+        nudge_cfg = full_conf.get('nudge_settings', {})
+        step_fraction = nudge_cfg.get('step_fraction', 0.15)
+        min_step_fraction = nudge_cfg.get('min_step_fraction', 0.005)
+        allow_full_jump = nudge_cfg.get('allow_full_jump', False)
+
         current_state = map_tags_to_friendly_names(raw_state, controls_cfg, indicators_cfg)
 
         if (d := check_disturbance_rules(current_state)): return d
@@ -620,7 +730,6 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
         # =========================================================
 
         if mode == 'MANUAL':
-            # --- MANUAL: Load from File (Fast) ---
             engine_logger.info("=== CYCLE START | Mode: MANUAL ===")
             try:
                 with open(os.path.join(config.JSON_DIR, "current_target.json"), 'r') as f:
@@ -632,11 +741,9 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
                 mode = 'AUTO'  # Fallback
 
         if mode != 'MANUAL':
-            # --- AUTO: Check Timer ---
             time_since_last = (now - LAST_AUTO_SCAN_TIME).total_seconds() if LAST_AUTO_SCAN_TIME else 99999
 
             if time_since_last >= get_scan_interval() or CACHED_AUTO_RESULT is None:
-                # -> TIME TO SCAN (Every 5 mins)
                 engine_logger.info(f"=== CYCLE START | Mode: AUTO [SCANNING NEW TARGET] ===")
 
                 hist_df = get_cached_dataframe(controls_cfg, indicators_cfg)
@@ -648,7 +755,6 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
                     best = best_rows[0]
                     ts_col = get_timestamp_col()
 
-                    # Update Cache
                     CACHED_AUTO_RESULT = {
                         "target_vals": best.to_dict(),
                         "target_disp": str(best.get(ts_col)),
@@ -658,14 +764,12 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
                     engine_logger.info(f"[AUTO] New Target Found: {CACHED_AUTO_RESULT['target_disp']}")
                 else:
                     engine_logger.warning("[AUTO] No matches found. Keeping previous target.")
-                    LAST_AUTO_SCAN_TIME = now  # <--- CRITICAL FIX: Ensure cool down even on failure
+                    LAST_AUTO_SCAN_TIME = now
 
             else:
-                # -> USE CACHE (Fast Loop)
                 engine_logger.info(f"=== CYCLE START | Mode: AUTO [USING CACHED TARGET] ===")
                 engine_logger.info(f"Next scan in {int(get_scan_interval() - time_since_last)} seconds.")
 
-            # Load from Cache if available
             if CACHED_AUTO_RESULT:
                 target_vals = CACHED_AUTO_RESULT["target_vals"]
                 target_disp = CACHED_AUTO_RESULT["target_disp"]
@@ -673,33 +777,47 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
                 reason = "Best Match (Cached)"
 
         # =========================================================
-        # CONTROL LOOP (Calculates Nudges Every Cycle)
+        # CONTROL LOOP — Nudge calculation, fully config-driven
         # =========================================================
         ui_actions = []
-        # engine_logger.info("TUNING: Calculating Nudge Steps...")
-        # (Commented out above log to reduce noise in fast cycle)
 
-        for tag, cfg in controls_cfg.items():
-            if not cfg.get('aipc', True): continue
-            if not cfg.get('is_setpoint', True): continue
+        for tag, cfg_var in controls_cfg.items():
+            # Skip if explicitly excluded from AI control (aipc: false)
+            if not cfg_var.get('aipc', True): continue
+            if not cfg_var.get('is_setpoint', True): continue
 
             curr = float(current_state.get(tag, 0))
             tgt = align_magnitude(float(target_vals.get(tag, curr)), curr)
 
-            step = (tgt - curr) * 0.15
-            if abs(step) < abs(curr) * 0.005: step = tgt - curr
+            gap = tgt - curr
+            step = gap * step_fraction
 
-            ui_actions.append({"var_name": tag, "fingerprint_set_point": curr + step, "current_setpoint": str(curr),
-                               "reason": f"{reason} (Nudging)"})
+            # Enforce minimum step — but NEVER allow a full jump (allow_full_jump=False)
+            if abs(step) < abs(curr) * min_step_fraction:
+                if allow_full_jump:
+                    step = gap  # Only if explicitly permitted by config
+                else:
+                    step = gap * min_step_fraction  # Gradual minimum nudge
+
+            ui_actions.append({
+                "var_name": tag,
+                "fingerprint_set_point": curr + step,
+                "current_setpoint": str(curr),
+                "reason": f"{reason} (Nudging)"
+            })
 
         return {
             "match_score": f"ACTIVE-{mode}", "timestamp": str(now),
-            "target_timestamp": target_disp, "top_matches": top_matches, "fingerprint_future": future_data,
-            "calculated_metrics": calculate_kpis(current_state), "actions": ui_actions
+            "target_timestamp": target_disp, "top_matches": top_matches,
+            "fingerprint_future": future_data,
+            "calculated_metrics": calculate_kpis(current_state),
+            "actions": ui_actions
         }
     except Exception as e:
         engine_logger.error(f"Runtime Error: {e}", exc_info=True)
         return None
+
+
 # ==============================================================================
 # 7. LEGACY API SUPPORT (RESTORED)
 # ==============================================================================
@@ -759,54 +877,54 @@ def rank_and_select_recommendations(historical_df, candidates, weights=None, cur
     else:
         return []
     if df.empty: return []
-    # FAST VECTORIZED SCORING (Replacing slow df.apply loop)
-    # 1. Base weights scoring
+
+    conf = get_model_config_safe()
     df['score'] = 0.0
     if weights:
         for tag, w in weights.items():
             if tag in df.columns:
                 df['score'] += df[tag].fillna(0) * w
 
-    # 2. Distance Penalty Scoring
-    if isinstance(current_state, dict):
+    if isinstance(current_state, dict) and controls_cfg:
         dist_sum = pd.Series(0.0, index=df.index)
-        
-        for tag, props in active_constraints.items() if active_constraints else controls_cfg.items():
+
+        for tag, props in controls_cfg.items():
             if tag not in df.columns: continue
-                
             try:
-                # Discard rows strictly out of bounds
                 user_min = float(props.get('min', props.get('Min', props.get('default_min', -9e9))))
                 user_max = float(props.get('max', props.get('Max', props.get('default_max', 9e9))))
-                
+
                 out_of_bounds = (df[tag] < user_min) | (df[tag] > user_max)
                 df.loc[out_of_bounds, 'score'] = -999999.9
-                    
+
                 prio = int(props.get('priority', 3))
                 curr_val = float(current_state.get(tag, 0))
-                
+
+                # Use specific heat input for fuel tags
+                if tag in conf.get('fuel_calorific_pairing', {}):
+                    curr_val = get_heat_input(tag, curr_val, current_state, conf)
+
                 if curr_val != 0:
                     weight = {1: 10.0, 2: 5.0}.get(prio, 1.0)
-                    
-                    # Vectorized magnitude alignment
+
                     hist_vals = df[tag].copy()
                     ratios = np.abs(curr_val / hist_vals.replace(0, np.nan))
                     hist_vals = np.where((ratios > 800) & (ratios < 1200), hist_vals * 1000.0, hist_vals)
                     hist_vals = np.where((ratios > 0.0008) & (ratios < 0.0012), hist_vals / 1000.0, hist_vals)
                     hist_vals = np.where((ratios > 80) & (ratios < 120), hist_vals * 100.0, hist_vals)
-                    
+
                     dist_sum += ((np.abs(curr_val - hist_vals) / curr_val) ** 2) * weight
-                    
+
             except Exception:
                 continue
 
-        df['score'] -= (dist_sum * penalty_weight)
+        df['score'] -= (dist_sum * 1000.0)
 
-    # 3. Time Penalty (Age Decay)
     if ts_col in df.columns:
         now = pd.Timestamp.now()
         age_days = (now - df[ts_col]).dt.total_seconds() / 86400.0
         df['score'] -= (age_days.fillna(0) * 0.05)
+
     df = df.sort_values(by=['score'], ascending=False)
     stable_candidates = []
     unstable_candidates = []
@@ -829,11 +947,17 @@ def rank_and_select_recommendations(historical_df, candidates, weights=None, cur
 def pre_filter_by_constraints(historical_df, current_state, controls_cfg):
     if not controls_cfg or not isinstance(current_state, dict): return historical_df
     df_filtered = historical_df.copy()
+    conf = get_model_config_safe()
     for tag, cfg in controls_cfg.items():
         try:
             if int(cfg.get('priority', 100)) == 1:
                 val = float(current_state.get(tag, 0))
                 if val == 0: continue
+
+                # Use heat input for fuel tags
+                if tag in conf.get('fuel_calorific_pairing', {}):
+                    val = get_heat_input(tag, val, current_state, conf)
+
                 min_v, max_v = val * 0.75, val * 1.25
                 if tag in df_filtered.columns:
                     df_filtered = df_filtered[df_filtered[tag].between(min_v, max_v)]
