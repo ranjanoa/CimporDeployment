@@ -452,14 +452,41 @@ def _calculate_core_score(row, current_state, controls_cfg, weights=None, active
 # 5. SEARCH & OPTIMIZATION
 # ==============================================================================
 def apply_golden_filter(hist_df):
+    """Applies the golden_filter_tag (existing) plus the golden_prefilter block.
+    golden_prefilter excludes startup, shutdown, and upset periods before search.
+    All filter limits are read from model_config.json — nothing hardcoded.
+    """
     if hist_df.empty: return hist_df
-    conf = get_model_config_safe().get('logic_tags', {})
+    conf = get_model_config_safe()
+    logic = conf.get('logic_tags', {})
 
-    filter_tag = conf.get('golden_filter_tag')
-    filter_limit = conf.get('golden_filter_max', 850.0)
-
+    # Existing golden_filter_tag (single-tag upper limit)
+    filter_tag = logic.get('golden_filter_tag')
+    filter_limit = logic.get('golden_filter_max', 850.0)
     if filter_tag and filter_tag in hist_df.columns:
-        return hist_df[hist_df[filter_tag] <= filter_limit]
+        before = len(hist_df)
+        hist_df = hist_df[hist_df[filter_tag] <= filter_limit]
+        engine_logger.info(f"[PREFILTER] golden_filter_tag '{filter_tag}': removed {before - len(hist_df)} rows.")
+
+    # New golden_prefilter block — multi-tag range filter
+    prefilter = conf.get('golden_prefilter', {})
+    for tag, limits in prefilter.items():
+        if tag == 'comment': continue
+        if tag not in hist_df.columns: continue
+        if not isinstance(limits, dict): continue
+        lo = limits.get('min', None)
+        hi = limits.get('max', None)
+        before = len(hist_df)
+        if lo is not None and hi is not None:
+            hist_df = hist_df[hist_df[tag].between(float(lo), float(hi))]
+        elif lo is not None:
+            hist_df = hist_df[hist_df[tag] >= float(lo)]
+        elif hi is not None:
+            hist_df = hist_df[hist_df[tag] <= float(hi)]
+        removed = before - len(hist_df)
+        if removed > 0:
+            engine_logger.info(f"[PREFILTER] '{tag}' [{lo}-{hi}]: removed {removed:,} rows. Remaining: {len(hist_df):,}")
+
     return hist_df
 
 
@@ -755,13 +782,40 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
                     best = best_rows[0]
                     ts_col = get_timestamp_col()
 
+                    # Build rich match metadata — operators see WHY this timestamp was selected
+                    match_meta = {}
+                    opt_conf = full_conf.get('optimisation_target', {})
+                    co_targets = opt_conf.get('co_targets', [])
+
+                    # Always include primary target (motor current)
+                    primary_tag = opt_conf.get('primary_tag')
+                    if primary_tag and primary_tag in best:
+                        match_meta['motor_current_at_match'] = round(float(best.get(primary_tag, 0)), 1)
+
+                    # Include each co-target value at the matched timestamp
+                    for ct in co_targets:
+                        ctag = ct.get('tag')
+                        if ctag and ctag in best:
+                            key = ctag.replace(' ', '_').lower()
+                            match_meta[key] = round(float(best.get(ctag, 0)), 1)
+
+                    # Include fuel rates at matched timestamp
+                    for fuel_tag in full_conf.get('fuel_calorific_pairing', {}).keys():
+                        if fuel_tag in best:
+                            key = 'matched_' + fuel_tag.replace(' ', '_').lower()[:30]
+                            match_meta[key] = round(float(best.get(fuel_tag, 0)), 3)
+
                     CACHED_AUTO_RESULT = {
                         "target_vals": best.to_dict(),
                         "target_disp": str(best.get(ts_col)),
-                        "top_matches": [str(r.get(ts_col)) for r in best_rows]
+                        "top_matches": [str(r.get(ts_col)) for r in best_rows],
+                        "match_meta": match_meta
                     }
                     LAST_AUTO_SCAN_TIME = now
-                    engine_logger.info(f"[AUTO] New Target Found: {CACHED_AUTO_RESULT['target_disp']}")
+                    engine_logger.info(
+                        f"[AUTO] New Target: {CACHED_AUTO_RESULT['target_disp']} | "
+                        f"Motor: {match_meta.get('motor_current_at_match', '?')}A | "
+                        f"Meta: {match_meta}")
                 else:
                     engine_logger.warning("[AUTO] No matches found. Keeping previous target.")
                     LAST_AUTO_SCAN_TIME = now
@@ -774,6 +828,7 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
                 target_vals = CACHED_AUTO_RESULT["target_vals"]
                 target_disp = CACHED_AUTO_RESULT["target_disp"]
                 top_matches = CACHED_AUTO_RESULT.get("top_matches", [])
+                match_meta  = CACHED_AUTO_RESULT.get("match_meta", {})
                 reason = "Best Match (Cached)"
 
         # =========================================================
@@ -810,6 +865,7 @@ def get_live_fingerprint_action(current_real_df_window, frontend_strategy=None):
             "match_score": f"ACTIVE-{mode}", "timestamp": str(now),
             "target_timestamp": target_disp, "top_matches": top_matches,
             "fingerprint_future": future_data,
+            "match_meta": match_meta,
             "calculated_metrics": calculate_kpis(current_state),
             "actions": ui_actions
         }

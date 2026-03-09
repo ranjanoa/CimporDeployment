@@ -72,7 +72,7 @@
     },
     "Mass Flow Actual Solid 1 CalcinerBurner": {
       "aipc": true,
-      "default_max": 12,
+      "default_max": 7,
       "default_min": 0,
       "description": "MV: RDF calciner",
       "is_setpoint": true,
@@ -82,7 +82,7 @@
     },
     "Mass Flow Actual Solid 2 CalcinerBurner": {
       "aipc": true,
-      "default_max": 12,
+      "default_max": 7,
       "default_min": 0,
       "description": "MV: RDF calciner",
       "is_setpoint": true,
@@ -112,7 +112,7 @@
     },
     "Solid Fossil Mass Flow Actual CalcinerBurner": {
       "aipc": true,
-      "default_max": 13,
+      "default_max": 7,
       "default_min": 0.5,
       "description": "MV: Petcoke calciner",
       "is_setpoint": true,
@@ -122,7 +122,7 @@
     },
     "Solid Fossil Mass flow Actual MainBurner": {
       "aipc": true,
-      "default_max": 8.5,
+      "default_max": 6.0,
       "default_min": 0,
       "description": "MV: Petcoke main burner",
       "is_setpoint": true,
@@ -514,7 +514,7 @@
       "Solid Fossil Mass Flow Actual CalcinerBurner",
       "ID Fan Speed"
     ],
-    "stability_lookahead": 30,
+    "stability_lookahead": 120,
     "stability_tags": [
       {
         "tag": "T Burning Zone 1",
@@ -637,6 +637,16 @@
     "min_step_fraction": 0.005,
     "step_fraction": 0.15
   },
+  "golden_prefilter": {
+    "comment": "Pre-filter applied BEFORE fingerprint search to exclude startup, shutdown and upset periods. Reduces search space from ~100% to ~20% of dataset, dramatically improving match quality.",
+    "Motor 1 Current": {
+      "min": 260,
+      "max": 320
+    },
+    "Weighfeeder Mass Flow": {
+      "min": 200
+    }
+  },
   "optimisation_target": {
     "co_targets": [
       {
@@ -647,8 +657,8 @@
       },
       {
         "tag": "O2 Outlet cyclone 3",
-        "min": 2.0,
-        "max": 4.5,
+        "min": 2.5,
+        "max": 4.0,
         "weight": 0.3
       }
     ],
