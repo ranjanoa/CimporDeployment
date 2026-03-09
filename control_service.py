@@ -29,6 +29,10 @@ class ControlService:
         """
         if not Client: return False
 
+        # Short-circuit: if PLC is not required, don't even attempt a connection
+        if not getattr(config, 'REQUIRE_PLC', True):
+            return False
+
         # Rate Limit: Don't spam the server if it's down (wait 5s or 10s)
         if not self.connected and (time.time() - self.last_connection_attempt < self.retry_delay):
             return False
@@ -91,6 +95,8 @@ class ControlService:
         """
         Writes Heartbeat & Status to the PLC.
         """
+        if not getattr(config, 'REQUIRE_PLC', True):
+            return  # PLC not required; skip handshake entirely
         if not self.connect(): return
 
         try:
