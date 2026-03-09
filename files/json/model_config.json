@@ -1,0 +1,671 @@
+{
+  "ai_bindings": {
+    "description": "Maps AI roles to specific process tags",
+    "output_keys": {
+      "confidence": "ai_confidence",
+      "prediction": "wm_pred_BZT",
+      "recommendation": "ai_rec_mainFuel"
+    },
+    "primary_control_actor": "Solid Fossil Mass flow Actual MainBurner",
+    "primary_prediction_target": "T Burning Zone 1"
+  },
+  "control_variables": {
+    "Dividing gate position Cyclone 3": {
+      "aipc": true,
+      "default_max": 100,
+      "default_min": 10,
+      "description": "MV: Dividing gate position",
+      "is_setpoint": true,
+      "priority": 3,
+      "tag_name": "Dividing gate position Cyclone 3",
+      "unit": "%"
+    },
+    "Fan Gas Flow": {
+      "aipc": true,
+      "default_max": 1000,
+      "default_min": 10,
+      "description": "MV: Quenching fan flow rate",
+      "is_setpoint": true,
+      "priority": 3,
+      "tag_name": "Fan Gas Flow",
+      "unit": "%"
+    },
+    "Fan Speed": {
+      "aipc": true,
+      "default_max": 1500,
+      "default_min": 0,
+      "description": "MV: Quenching fan speed",
+      "is_setpoint": true,
+      "priority": 3,
+      "tag_name": "Fan Speed",
+      "unit": "rpm"
+    },
+    "Filter Fan Motor Speed": {
+      "aipc": true,
+      "default_max": 1050,
+      "default_min": 600,
+      "description": "MV: Cooler BF fan speed",
+      "is_setpoint": true,
+      "priority": 4,
+      "tag_name": "Filter Fan Motor Speed",
+      "unit": "rpm"
+    },
+    "ID Fan Speed": {
+      "aipc": true,
+      "default_max": 1000,
+      "default_min": 300,
+      "description": "MV: ID fan speed",
+      "is_setpoint": true,
+      "priority": 2,
+      "tag_name": "ID Fan Speed",
+      "unit": "rpm"
+    },
+    "Liquid Alternative Mass Flow Actual MainBurner": {
+      "aipc": true,
+      "default_max": 2000,
+      "default_min": 1000,
+      "description": "MV: RIP (liquids) main burner",
+      "is_setpoint": true,
+      "priority": 4,
+      "tag_name": "Liquid Alternative Mass Flow Actual MainBurner",
+      "unit": "l/h"
+    },
+    "Mass Flow Actual Solid 1 CalcinerBurner": {
+      "aipc": true,
+      "default_max": 12,
+      "default_min": 0,
+      "description": "MV: RDF calciner",
+      "is_setpoint": true,
+      "priority": 1,
+      "tag_name": "Mass Flow Actual Solid 1 CalcinerBurner",
+      "unit": "t/h"
+    },
+    "Mass Flow Actual Solid 2 CalcinerBurner": {
+      "aipc": true,
+      "default_max": 12,
+      "default_min": 0,
+      "description": "MV: RDF calciner",
+      "is_setpoint": true,
+      "priority": 1,
+      "tag_name": "Mass Flow Actual Solid 2 CalcinerBurner",
+      "unit": "t/h"
+    },
+    "Position flap": {
+      "aipc": true,
+      "default_max": 100,
+      "default_min": 0,
+      "description": "MV: Tertiary air damper position",
+      "is_setpoint": true,
+      "priority": 3,
+      "tag_name": "Position flap",
+      "unit": "%"
+    },
+    "Solid Alternative Mass Flow Actual MainBurner": {
+      "aipc": true,
+      "default_max": 7,
+      "default_min": 0,
+      "description": "MV: RDF main burner",
+      "is_setpoint": true,
+      "priority": 1,
+      "tag_name": "Solid Alternative Mass Flow Actual MainBurner",
+      "unit": "t/h"
+    },
+    "Solid Fossil Mass Flow Actual CalcinerBurner": {
+      "aipc": true,
+      "default_max": 13,
+      "default_min": 0.5,
+      "description": "MV: Petcoke calciner",
+      "is_setpoint": true,
+      "priority": 1,
+      "tag_name": "Solid Fossil Mass Flow Actual CalcinerBurner",
+      "unit": "t/h"
+    },
+    "Solid Fossil Mass flow Actual MainBurner": {
+      "aipc": true,
+      "default_max": 8.5,
+      "default_min": 0,
+      "description": "MV: Petcoke main burner",
+      "is_setpoint": true,
+      "priority": 1,
+      "tag_name": "Solid Fossil Mass flow Actual MainBurner",
+      "unit": "t/h"
+    },
+    "Speed Actual Stroke central grille 1": {
+      "aipc": false,
+      "default_max": 15,
+      "default_min": 10,
+      "description": "MV: Cooler grate speed (managed by PID - not AI controlled)",
+      "is_setpoint": true,
+      "priority": 2,
+      "tag_name": "Speed Actual Stroke central grille 1",
+      "unit": "stroke/min"
+    },
+    "Speed Actual Stroke central grille 2": {
+      "aipc": false,
+      "default_max": 15,
+      "default_min": 10,
+      "description": "MV: Cooler grate speed (managed by PID - not AI controlled)",
+      "is_setpoint": true,
+      "priority": 2,
+      "tag_name": "Speed Actual Stroke central grille 2",
+      "unit": "stroke/min"
+    },
+    "Speed Actual Stroke left grille": {
+      "aipc": false,
+      "default_max": 15,
+      "default_min": 10,
+      "description": "MV: Cooler grate speed (managed by PID - not AI controlled)",
+      "is_setpoint": true,
+      "priority": 2,
+      "tag_name": "Speed Actual Stroke left grille",
+      "unit": "stroke/min"
+    },
+    "Speed Actual Stroke right grille": {
+      "aipc": false,
+      "default_max": 15,
+      "default_min": 10,
+      "description": "MV: Cooler grate speed (managed by PID - not AI controlled)",
+      "is_setpoint": true,
+      "priority": 2,
+      "tag_name": "Speed Actual Stroke right grille",
+      "unit": "stroke/min"
+    },
+    "Speed Actual Value": {
+      "aipc": true,
+      "default_max": 4.1,
+      "default_min": 0,
+      "description": "MV: Kiln speed",
+      "is_setpoint": true,
+      "priority": 1,
+      "tag_name": "Speed Actual Value",
+      "unit": "rpm"
+    },
+    "Weighfeeder Mass Flow": {
+      "aipc": true,
+      "default_max": 300,
+      "default_min": 200,
+      "description": "MV: Kiln feed",
+      "is_setpoint": true,
+      "priority": 1,
+      "tag_name": "Weighfeeder Mass Flow",
+      "unit": "t/h"
+    }
+  },
+  "indicator_variables": {
+    "% TSR Kiln Inst": {
+      "priority": 5,
+      "tag_name": "% TSR Kiln Inst"
+    },
+    "% TSR Main Burner Inst": {
+      "priority": 5,
+      "tag_name": "% TSR Main Burner Inst"
+    },
+    "% TSR PreCalciner CDR30Inst": {
+      "priority": 5,
+      "tag_name": "% TSR PreCalciner CDR30Inst"
+    },
+    "Boiler bypass damper Position": {
+      "priority": 2,
+      "tag_name": "Boiler bypass damper Position"
+    },
+    "C3S DRX sum": {
+      "priority": 2,
+      "tag_name": "C3S DRX sum"
+    },
+    "C3S M1": {
+      "priority": 2,
+      "tag_name": "C3S M1"
+    },
+    "C3S M3": {
+      "priority": 2,
+      "tag_name": "C3S M3"
+    },
+    "CO Outlet cyclone 3": {
+      "priority": 2,
+      "tag_name": "CO Outlet cyclone 3"
+    },
+    "CO Smoke Chamber": {
+      "priority": 1,
+      "tag_name": "CO Smoke Chamber"
+    },
+    "CaOl DRX": {
+      "priority": 2,
+      "tag_name": "CaOl DRX"
+    },
+    "CaOlivre": {
+      "priority": 2,
+      "tag_name": "CaOlivre"
+    },
+    "Calciner T 1 Combustion Chamber": {
+      "priority": 2,
+      "tag_name": "Calciner T 1 Combustion Chamber"
+    },
+    "Calciner T 2 Combustion Chamber": {
+      "priority": 2,
+      "tag_name": "Calciner T 2 Combustion Chamber"
+    },
+    "Calorific Value - CDR30 Calciner": {
+      "priority": 5,
+      "tag_name": "Calorific Value - CDR30 Calciner"
+    },
+    "Calorific Value - Fuel": {
+      "priority": 5,
+      "tag_name": "Calorific Value - Fuel"
+    },
+    "Calorific Value - MRSP Main Burner": {
+      "priority": 5,
+      "tag_name": "Calorific Value - MRSP Main Burner"
+    },
+    "Calorific Value - Petcoke": {
+      "priority": 5,
+      "tag_name": "Calorific Value - Petcoke"
+    },
+    "Calorific Value - RIP 190205": {
+      "priority": 5,
+      "tag_name": "Calorific Value - RIP 190205"
+    },
+    "Calorific Value - RIP 190208": {
+      "priority": 5,
+      "tag_name": "Calorific Value - RIP 190208"
+    },
+    "Calorific Value - RIP 191211": {
+      "priority": 5,
+      "tag_name": "Calorific Value - RIP 191211"
+    },
+    "Cl C4's": {
+      "priority": 2,
+      "tag_name": "Cl C4's"
+    },
+    "Clinker Factor": {
+      "priority": 5,
+      "tag_name": "Clinker Factor"
+    },
+    "Coal Mill 41 ON": {
+      "priority": 2,
+      "tag_name": "Coal Mill 41 ON"
+    },
+    "Delta P": {
+      "priority": 2,
+      "tag_name": "Delta P"
+    },
+    "Delta P 2": {
+      "priority": 2,
+      "tag_name": "Delta P 2"
+    },
+    "Dividing gate position SP": {
+      "priority": 2,
+      "tag_name": "Dividing gate position SP"
+    },
+    "Elevator 1 Current": {
+      "priority": 2,
+      "tag_name": "Elevator 1 Current"
+    },
+    "Fan Speed SP": {
+      "priority": 2,
+      "tag_name": "Fan Speed SP"
+    },
+    "Filter Fan Speed": {
+      "priority": 2,
+      "tag_name": "Filter Fan Speed"
+    },
+    "Gas Analysis CO Calciner": {
+      "priority": 2,
+      "tag_name": "Gas Analysis CO Calciner"
+    },
+    "ID Fan P outlet": {
+      "priority": 2,
+      "tag_name": "ID Fan P outlet"
+    },
+    "ID Fan Speed SP": {
+      "priority": 2,
+      "tag_name": "ID Fan Speed SP"
+    },
+    "Kiln feed LSF": {
+      "priority": 2,
+      "tag_name": "Kiln feed LSF"
+    },
+    "LOI C4's": {
+      "priority": 2,
+      "tag_name": "LOI C4's"
+    },
+    "Mass Flow Clinker production": {
+      "priority": 2,
+      "tag_name": "Mass Flow Clinker production"
+    },
+    "Mass Flow RIP 19 02 05": {
+      "priority": 2,
+      "tag_name": "Mass Flow RIP 19 02 05"
+    },
+    "Mass Flow RIP 19 02 08": {
+      "priority": 2,
+      "tag_name": "Mass Flow RIP 19 02 08"
+    },
+    "Mass Flow RIP 19 12 11": {
+      "priority": 2,
+      "tag_name": "Mass Flow RIP 19 12 11"
+    },
+    "Mass Flow Set Solid Fuel.1": {
+      "priority": 2,
+      "tag_name": "Mass Flow Set Solid Fuel.1"
+    },
+    "Mass Flow Set Solid Fuel.2": {
+      "priority": 2,
+      "tag_name": "Mass Flow Set Solid Fuel.2"
+    },
+    "Mass Flow set": {
+      "priority": 2,
+      "tag_name": "Mass Flow set"
+    },
+    "Mass Flow set Solid Alt": {
+      "priority": 2,
+      "tag_name": "Mass Flow set Solid Alt"
+    },
+    "Mass FlowSet point": {
+      "priority": 2,
+      "tag_name": "Mass FlowSet point"
+    },
+    "Motor 1 Current": {
+      "priority": 1,
+      "tag_name": "Motor 1 Current"
+    },
+    "Motor 1 Speed": {
+      "priority": 2,
+      "tag_name": "Motor 1 Speed"
+    },
+    "Motor 2 Current": {
+      "priority": 1,
+      "tag_name": "Motor 2 Current"
+    },
+    "Motor 2 Speed": {
+      "priority": 2,
+      "tag_name": "Motor 2 Speed"
+    },
+    "NOX Smoke Chamber": {
+      "priority": 1,
+      "tag_name": "NOX Smoke Chamber"
+    },
+    "O2 Calciner": {
+      "priority": 2,
+      "tag_name": "O2 Calciner"
+    },
+    "O2 Outlet cyclone 3": {
+      "priority": 1,
+      "tag_name": "O2 Outlet cyclone 3"
+    },
+    "O2 Smoke Chamber": {
+      "priority": 1,
+      "tag_name": "O2 Smoke Chamber"
+    },
+    "P Layer 1 chamber 2": {
+      "priority": 2,
+      "tag_name": "P Layer 1 chamber 2"
+    },
+    "P Layer 2 chamber 2": {
+      "priority": 2,
+      "tag_name": "P Layer 2 chamber 2"
+    },
+    "P inlet": {
+      "priority": 2,
+      "tag_name": "P inlet"
+    },
+    "P outlet": {
+      "priority": 2,
+      "tag_name": "P outlet"
+    },
+    "Position flap SP": {
+      "priority": 2,
+      "tag_name": "Position flap SP"
+    },
+    "Production Factor": {
+      "priority": 2,
+      "tag_name": "Production Factor"
+    },
+    "Raw Mill 3 ON": {
+      "priority": 2,
+      "tag_name": "Raw Mill 3 ON"
+    },
+    "Specfical Heat Consumption Inst": {
+      "priority": 5,
+      "tag_name": "Specfical Heat Consumption Inst"
+    },
+    "Speed Set Value": {
+      "priority": 2,
+      "tag_name": "Speed Set Value"
+    },
+    "T Burning Zone 1": {
+      "priority": 1,
+      "tag_name": "T Burning Zone 1"
+    },
+    "T Burning Zone 2": {
+      "priority": 1,
+      "tag_name": "T Burning Zone 2"
+    },
+    "T gas 1 Secondary Air": {
+      "priority": 2,
+      "tag_name": "T gas 1 Secondary Air"
+    },
+    "T gas 2 Secondary Air": {
+      "priority": 2,
+      "tag_name": "T gas 2 Secondary Air"
+    },
+    "T gas inlet": {
+      "priority": 2,
+      "tag_name": "T gas inlet"
+    },
+    "T gas outlet": {
+      "priority": 2,
+      "tag_name": "T gas outlet"
+    },
+    "T gas outlet Cyclone 4A": {
+      "priority": 2,
+      "tag_name": "T gas outlet Cyclone 4A"
+    },
+    "T gas outlet Cyclone 4B": {
+      "priority": 2,
+      "tag_name": "T gas outlet Cyclone 4B"
+    },
+    "T mat out Cyclone 4A 1": {
+      "priority": 2,
+      "tag_name": "T mat out Cyclone 4A 1"
+    },
+    "T mat out Cyclone 4A 2": {
+      "priority": 2,
+      "tag_name": "T mat out Cyclone 4A 2"
+    },
+    "T mat out Cyclone 4B 1": {
+      "priority": 2,
+      "tag_name": "T mat out Cyclone 4B 1"
+    },
+    "T mat out Cyclone 4B 2": {
+      "priority": 2,
+      "tag_name": "T mat out Cyclone 4B 2"
+    },
+    "T termographic Burning Zone": {
+      "priority": 1,
+      "tag_name": "T termographic Burning Zone"
+    },
+    "Tertiary Air Delta P 1": {
+      "priority": 2,
+      "tag_name": "Tertiary Air Delta P 1"
+    },
+    "Thermal Split CalcinerInst": {
+      "priority": 5,
+      "tag_name": "Thermal Split CalcinerInst"
+    },
+    "Weighfeeder Kiln Production": {
+      "priority": 2,
+      "tag_name": "Weighfeeder Kiln Production"
+    },
+    "Weighfeeder Mass Flow SP": {
+      "priority": 2,
+      "tag_name": "Weighfeeder Mass Flow SP"
+    }
+  },
+  "logic_tags": {
+    "auto_cycle_minutes": 2,
+    "deviation_filter_tags": [
+      "Weighfeeder Mass Flow",
+      "Solid Fossil Mass Flow Actual CalcinerBurner",
+      "ID Fan Speed"
+    ],
+    "main_optimization_tag": "Weighfeeder Mass Flow",
+    "min_max_constraint_tags": [
+      "Weighfeeder Mass Flow",
+      "Solid Fossil Mass Flow Actual CalcinerBurner",
+      "ID Fan Speed"
+    ],
+    "stability_lookahead": 30,
+    "stability_tags": [
+      {
+        "tag": "T termographic Burning Zone",
+        "threshold_pct": 0.03
+      },
+      {
+        "tag": "T gas 1 Secondary Air",
+        "threshold_pct": 0.04
+      },
+      {
+        "tag": "O2 Outlet cyclone 3",
+        "threshold_pct": 0.10
+      },
+      {
+        "tag": "CO Smoke Chamber",
+        "threshold_pct": 0.15
+      },
+      {
+        "tag": "CaOlivre",
+        "threshold_pct": 0.05
+      }
+    ],
+    "strict_filter_priority": 1
+  },
+  "model_name": "Cimpor Kiln 3 - Working Names Restored V22.0",
+  "opc_handshake": {
+    "control_enable_read": "ns=3;i=1021",
+    "description": "Communication tags for PLC-AI Handshaking",
+    "status_write": "ns=3;i=1022",
+    "watchdog_write": "ns=3;i=1023"
+  },
+  "operational_matrix_settings": {
+    "actuators": {
+      "bf_fan": "Filter Fan Motor Speed",
+      "dividing_gate": "Dividing gate position Cyclone 3",
+      "feed": "Weighfeeder Mass Flow",
+      "fuel_calciner": "Solid Fossil Mass Flow Actual CalcinerBurner",
+      "fuel_main": "Solid Fossil Mass flow Actual MainBurner",
+      "grate_speed": "Speed Actual Stroke central grille 1",
+      "id_fan": "ID Fan Speed"
+    },
+    "description": "Dynamic Weight Bias based on Operational Matrix. All logic driven from this config.",
+    "enabled": true,
+    "hot_kiln_rule": {
+      "apply_feed_only_if_fuel_already_reduced": true,
+      "comment": "When BZT is hot, reduce fuel first. Feed increase is secondary and only applied if fuel is already trending down.",
+      "feed_weight": 10.0,
+      "fuel_weight": -15.0,
+      "priority_action": "fuel_first"
+    },
+    "limits": {
+      "bzt_cold": 1250,
+      "bzt_hot": 1400,
+      "c4_temp_min": 860,
+      "co_max": 0.3,
+      "grate_pressure_target": 45,
+      "hood_pressure_min": -5,
+      "nox_high": 900,
+      "o2_max": 6,
+      "o2_min": 2.5,
+      "tertiary_dp_high": 45
+    },
+    "matrix_bias": {
+      "cold_kiln_fuel_weight": 15,
+      "high_pressure_grate_weight": 8,
+      "hot_kiln_feed_weight": 10,
+      "hot_kiln_fuel_weight": -15,
+      "low_c4_calciner_weight": 8,
+      "low_o2_fan_weight": 0
+    },
+    "matrix_rules": {
+      "cold_kiln_enabled": true,
+      "hot_kiln_enabled": true,
+      "low_c4_temp_enabled": true,
+      "low_o2_id_fan_enabled": false
+    },
+    "tags": {
+      "bzt": "T termographic Burning Zone",
+      "c3_co": "CO Outlet cyclone 3",
+      "c3_o2": "O2 Outlet cyclone 3",
+      "c4_temp": "T gas outlet Cyclone 4A",
+      "co_inlet": "CO Smoke Chamber",
+      "grate_pressure": "P Layer 1 chamber 2",
+      "hood_pressure": "Delta P",
+      "nox": "NOX Smoke Chamber",
+      "o2_inlet": "O2 Outlet cyclone 3",
+      "tertiary_dp": "Tertiary Air Delta P 1"
+    }
+  },
+  "optimization_settings": {
+    "target_setpoint": 1350,
+    "target_variable": "T Burning Zone 1",
+    "weights": {
+      "ID Fan Speed": -0.02,
+      "Liquid Alternative Mass Flow Actual MainBurner": 0.04,
+      "Mass Flow Actual Solid 1 CalcinerBurner": 0.05,
+      "Mass Flow Actual Solid 2 CalcinerBurner": 0.05,
+      "Solid Alternative Mass Flow Actual MainBurner": 0.05,
+      "Solid Fossil Mass Flow Actual CalcinerBurner": -0.04,
+      "Solid Fossil Mass flow Actual MainBurner": -0.06,
+      "Weighfeeder Mass Flow": 0.06
+    }
+  },
+  "fuel_calorific_pairing": {
+    "comment": "Maps each fuel flow tag to its corresponding calorific value tag. Used to compute specific heat input (GJ/h = flow x CV) instead of raw flow rate.",
+    "Liquid Alternative Mass Flow Actual MainBurner": "Calorific Value - RIP 190205",
+    "Mass Flow Actual Solid 1 CalcinerBurner": "Calorific Value - CDR30 Calciner",
+    "Mass Flow Actual Solid 2 CalcinerBurner": "Calorific Value - CDR30 Calciner",
+    "Solid Alternative Mass Flow Actual MainBurner": "Calorific Value - MRSP Main Burner",
+    "Solid Fossil Mass Flow Actual CalcinerBurner": "Calorific Value - CDR30 Calciner",
+    "Solid Fossil Mass flow Actual MainBurner": "Calorific Value - Petcoke"
+  },
+  "nudge_settings": {
+    "allow_full_jump": false,
+    "comment": "Controls how setpoints are nudged each cycle. step_fraction = fraction of the gap to close per cycle. No full-jump fallback allowed.",
+    "min_step_fraction": 0.005,
+    "step_fraction": 0.15
+  },
+  "optimisation_target": {
+    "co_targets": [
+      {
+        "tag": "T termographic Burning Zone",
+        "min": 1280,
+        "max": 1400,
+        "weight": 0.4
+      },
+      {
+        "tag": "O2 Outlet cyclone 3",
+        "min": 2.0,
+        "max": 4.5,
+        "weight": 0.3
+      }
+    ],
+    "comment": "Primary target is kiln torque (motor current) in the 280-300A range. BZT and O2 are co-targets. Motor current cannot be fooled by coating unlike BZT alone.",
+    "primary_max": 300,
+    "primary_min": 280,
+    "primary_tag": "Motor 1 Current"
+  },
+  "safety_rules": [
+    {
+      "action_type": "offset",
+      "action_value": -0.3,
+      "action_var": "Solid Fossil Mass flow Actual MainBurner",
+      "comment": "Reduce main burner fuel gradually by max ramp_rate t/h per cycle. No step change allowed.",
+      "condition_var": "T termographic Burning Zone",
+      "name": "BZT Critical High",
+      "operator": ">",
+      "priority": 0,
+      "ramp_rate": 0.3,
+      "threshold": 1400
+    }
+  ],
+  "version": "22.0"
+}
