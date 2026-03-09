@@ -535,6 +535,10 @@
       {
         "tag": "CaOlivre",
         "threshold_pct": 0.05
+      },
+      {
+        "tag": "Motor 1 Current",
+        "threshold_pct": 0.05
       }
     ],
     "strict_filter_priority": 1
