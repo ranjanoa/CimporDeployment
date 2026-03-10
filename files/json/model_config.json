@@ -693,7 +693,7 @@
         "co_targets": [
           {
             "tag": "Motor 1 Current",
-            "min": 280,
+            "min": 280.0,
             "max": 300,
             "weight": 0.3
           },
